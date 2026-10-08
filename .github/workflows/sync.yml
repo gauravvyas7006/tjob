@@ -1,0 +1,33 @@
+# Checks your mailbox for job updates every 30 minutes, 7:00 AM – midnight IST.
+# (Vercel's free plan only allows a daily cron, so GitHub Actions does the frequent runs:
+#  ~35 runs/day × ~30 s, well inside the 2,000 free minutes/month for private repos.)
+# Needs repository secrets TJOB_URL (e.g. https://tjob-xyz.vercel.app) and CRON_SECRET.
+name: Sync mail
+
+on:
+  schedule:
+    - cron: "30 1 * * *" # 07:00 IST
+    - cron: "0,30 2-18 * * *" # 07:30 – 00:00 IST
+  workflow_dispatch:
+
+concurrency:
+  group: tjob-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Trigger tjob sync
+        env:
+          TJOB_URL: ${{ secrets.TJOB_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$TJOB_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::notice::TJOB_URL / CRON_SECRET secrets not set yet - skipping."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error --max-time 300 \
+            -X POST -H "Authorization: Bearer $CRON_SECRET" \
+            "${TJOB_URL%/}/api/sync"

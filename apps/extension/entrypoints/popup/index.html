@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>tjob</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>tjob</h1>
+      <p id="status" class="muted">Not connected</p>
+      <form id="connect">
+        <label>
+          tjob address
+          <input id="appUrl" type="url" required placeholder="https://your-project.vercel.app" />
+        </label>
+        <label>
+          Extension token
+          <input id="token" type="password" required placeholder="tjob_…" autocomplete="off" />
+        </label>
+        <p class="hint">Create a token in tjob → Settings → Chrome extension.</p>
+        <button type="submit">Connect</button>
+      </form>
+      <div id="connected" hidden>
+        <p id="who"></p>
+        <p class="muted" id="skills"></p>
+        <div class="row">
+          <button id="open" type="button">Open tjob</button>
+          <button id="disconnect" type="button" class="secondary">Disconnect</button>
+        </div>
+        <p class="hint">Open any LinkedIn or Naukri job: the tjob panel appears bottom-right.</p>
+      </div>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
