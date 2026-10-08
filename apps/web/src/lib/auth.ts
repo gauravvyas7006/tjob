@@ -16,7 +16,9 @@ function createAuth() {
   return betterAuth({
     secret: e.BETTER_AUTH_SECRET,
     baseURL: appUrl(),
-    trustedOrigins: origins,
+    // Also trust the address each request was sent to. Comparing the browser's Origin with it is a
+    // same-origin check, so sign-in works on whichever domain this deployment is served from.
+    trustedOrigins: (request) => (request ? [...origins, requestOrigin(request)] : origins),
     database: drizzleAdapter(db, { provider: "pg", schema: authSchema }),
     emailAndPassword: {
       enabled: true,
@@ -47,6 +49,14 @@ function createAuth() {
     },
     plugins: [nextCookies()],
   });
+}
+
+function requestOrigin(request: Request): string | null {
+  try {
+    return new URL(request.url).origin;
+  } catch {
+    return null;
+  }
 }
 
 type Auth = ReturnType<typeof createAuth>;

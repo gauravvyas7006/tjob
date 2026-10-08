@@ -38,10 +38,11 @@ export function missingEnv(): { name: string; problem: string }[] {
 }
 
 export function appUrl(): string {
-  return (
-    process.env.BETTER_AUTH_URL ??
-    (process.env.VERCEL_PROJECT_PRODUCTION_URL
-      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-      : "http://localhost:3000")
-  );
+  const configured = process.env.BETTER_AUTH_URL;
+  // On Vercel, a localhost address (copied over from .env.local) is never right: use the real one.
+  const ignored = Boolean(process.env.VERCEL) && /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(configured ?? "");
+  if (configured && !ignored) return configured;
+  return process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : "http://localhost:3000";
 }

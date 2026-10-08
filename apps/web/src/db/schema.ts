@@ -14,10 +14,15 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type {
+  AgencyKind,
+  AgencyStatus,
   ApplicationStatus,
   CaptureMethod,
   Cv,
   EmailCategory,
+  EventMark,
+  EventSource,
+  EventTopic,
   JdExtraction,
   JobSource,
   TailorChange,
@@ -391,6 +396,87 @@ export const aiBatches = pgTable("ai_batches", {
   requestCount: integer("request_count").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
+});
+
+/** Recruitment agencies and hiring platforms to approach, with outreach tracking. */
+export const agencies = pgTable(
+  "agencies",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: userRef(),
+    name: text("name").notNull(),
+    kind: text("kind").$type<AgencyKind>().notNull().default("recruiter"),
+    focus: text("focus").notNull().default(""),
+    city: text("city").notNull().default("Bengaluru"),
+    area: text("area").notNull().default(""),
+    address: text("address").notNull().default(""),
+    website: text("website").notNull().default(""),
+    applyUrl: text("apply_url").notNull().default(""),
+    email: text("email").notNull().default(""),
+    phone: text("phone").notNull().default(""),
+    linkedinUrl: text("linkedin_url").notNull().default(""),
+    howToApproach: text("how_to_approach").notNull().default(""),
+    status: text("status").$type<AgencyStatus>().notNull().default("to_contact"),
+    contactedAt: timestamp("contacted_at", { withTimezone: true }),
+    notes: text("notes").notNull().default(""),
+    /** "suggested" rows come from tjob's researched list; "user" rows were added by hand. */
+    origin: text("origin").$type<"suggested" | "user">().notNull().default("user"),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("agencies_user_name").on(t.userId, t.name)],
+);
+
+/**
+ * Upcoming in-person tech events in Bengaluru, read from public listings (lib/events).
+ * Public data, so it's shared rather than per user; each user's plans live in `event_marks`.
+ */
+export const events = pgTable(
+  "events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    source: text("source").$type<EventSource>().notNull(),
+    externalId: text("external_id").notNull(),
+    title: text("title").notNull(),
+    url: text("url").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    venue: text("venue").notNull().default(""),
+    address: text("address").notNull().default(""),
+    organizer: text("organizer").notNull().default(""),
+    /** null when the listing doesn't say. */
+    isFree: boolean("is_free"),
+    price: text("price").notNull().default(""),
+    topics: jsonb("topics").$type<EventTopic[]>().notNull().default([]),
+    /** RSVP count, when the listing shows one. */
+    going: integer("going"),
+    /** Registration caveats from the listing, e.g. "Host approval needed". */
+    note: text("note").notNull().default(""),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("events_source_external").on(t.source, t.externalId), index("events_starts_at").on(t.startsAt)],
+);
+
+export const eventMarks = pgTable(
+  "event_marks",
+  {
+    userId: userRef(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    mark: text("mark").$type<EventMark>().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.eventId] })],
+);
+
+/** Outcome of the last fetch from each listing, shown on the Events page. */
+export const eventSources = pgTable("event_sources", {
+  source: text("source").$type<EventSource>().primaryKey(),
+  lastRunAt: timestamp("last_run_at", { withTimezone: true }).notNull(),
+  lastOkAt: timestamp("last_ok_at", { withTimezone: true }),
+  lastCount: integer("last_count").notNull().default(0),
+  lastError: text("last_error").notNull().default(""),
 });
 
 export const apiTokens = pgTable("api_tokens", {

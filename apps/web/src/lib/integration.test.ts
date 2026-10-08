@@ -39,7 +39,7 @@ vi.mock("@/lib/ai/tailor-cv", () => ({
   ),
 }));
 
-const { db, user, applications, emails, jobSkills, applicationEvents, masterCv, profile, savedAnswers, aiUsage } =
+const { db, user, applications, emails, jobSkills, applicationEvents, masterCv, profile, savedAnswers, aiUsage, agencies } =
   await import("@/db");
 const { processIncomingMail } = await import("./mail/process");
 const { upsertJob, ensureJobExtracted } = await import("./jobs");
@@ -51,6 +51,11 @@ const { assertAiAvailable, recordUsage, budgetStatus, AiUnavailableError } = awa
 const { encryptSecret, decryptSecret } = await import("./crypto");
 const { overviewStats, weeklyApplications, recentActivity } = await import("./stats");
 const { marketInsights } = await import("./insights");
+const { addSuggestedAgencies, missingSuggestionCount, setAgencyStatus } = await import("./agencies/service");
+const { SUGGESTED_AGENCIES } = await import("./agencies/suggested");
+const { refreshEvents, setEventMark, upcomingEvents } = await import("./events/service");
+const { events, eventSources } = await import("@/db");
+const { inDays, lumaResponse, meetupPage } = await import("./events/fixtures");
 
 const USER = "user-1";
 
@@ -371,6 +376,100 @@ describe("dashboard & insights SQL", () => {
     expect(ins.topSkills.find((s) => s.skill === "Kafka")?.inCv).toBe(false);
     expect(ins.salary[0]).toMatchObject({ role: "Java Backend", min: 12, max: 20, median: 16 });
     expect(ins.experience.find((e) => e.label === "2–3")?.value).toBe(1);
+  });
+});
+
+describe("agencies", () => {
+  it("adds the suggested list once and tracks outreach dates", async () => {
+    expect(await addSuggestedAgencies(USER)).toBe(SUGGESTED_AGENCIES.length);
+    expect(await addSuggestedAgencies(USER)).toBe(0);
+
+    const [own] = await db.insert(agencies).values({ userId: USER, name: "My recruiter" }).returning();
+    const names = (await db.select({ name: agencies.name }).from(agencies).where(eq(agencies.userId, USER))).map((r) => r.name);
+    expect(missingSuggestionCount(names)).toBe(0);
+    expect(missingSuggestionCount(["My recruiter"])).toBe(SUGGESTED_AGENCIES.length);
+
+    const contactedAt = async () =>
+      (await db.select({ at: agencies.contactedAt }).from(agencies).where(eq(agencies.id, own.id)))[0].at;
+    await setAgencyStatus(USER, own.id, "contacted");
+    const first = await contactedAt();
+    expect(first).toBeInstanceOf(Date);
+    await setAgencyStatus(USER, own.id, "in_touch");
+    expect(await contactedAt()).toEqual(first);
+    await setAgencyStatus(USER, own.id, "not_useful");
+    expect(await contactedAt()).toEqual(first);
+    await setAgencyStatus(USER, own.id, "to_contact");
+    expect(await contactedAt()).toBeNull();
+    // Another user's agency is never touched.
+    await setAgencyStatus("someone-else", own.id, "contacted");
+    expect(await contactedAt()).toBeNull();
+  });
+});
+
+describe("events", () => {
+  it("reads the listings, survives a failing site, merges duplicates and keeps the user's plans", async () => {
+    const start = inDays(4);
+    let meetupFails = false;
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("api.lu.ma")) {
+        return Response.json(
+          lumaResponse([
+            { id: "evt-1", name: "Swift Bengaluru × Okta", start },
+            { id: "evt-2", name: "Matcha with friends", start },
+            { id: "evt-3", name: "LLM Summit", start: inDays(6), free: false },
+          ]),
+        );
+      }
+      if (url.includes("meetup.com")) {
+        if (meetupFails) return new Response("blocked", { status: 403 });
+        return new Response(meetupPage([{ id: "101", title: "Swift Bengaluru × Okta", start }]));
+      }
+      return new Response("Forbidden", { status: 403 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const first = await refreshEvents();
+      expect(first.skipped).toBe(false);
+      expect(first.sources).toEqual([
+        { source: "luma", count: 2 },
+        { source: "meetup", count: 1 },
+        { source: "eventbrite", count: 0, error: "www.eventbrite.com answered HTTP 403" },
+      ]);
+      const status = await db.select().from(eventSources);
+      expect(status.find((s) => s.source === "eventbrite")).toMatchObject({ lastOkAt: null, lastError: expect.stringContaining("403") });
+
+      // Read recently: nothing is fetched.
+      const calls = fetchMock.mock.calls.length;
+      expect((await refreshEvents({ ifOlderThanMs: 60_000 })).skipped).toBe(true);
+      expect(fetchMock.mock.calls.length).toBe(calls);
+
+      let list = await upcomingEvents(USER);
+      expect(list.map((e) => e.title)).toEqual(["Swift Bengaluru × Okta", "LLM Summit"]);
+      const swift = list[0];
+      expect(swift).toMatchObject({ source: "luma", isFree: true, mark: null, alsoOn: [{ source: "meetup" }] });
+      expect(list[1]).toMatchObject({ isFree: false, price: "₹499", topics: ["ai"] });
+
+      await setEventMark(USER, swift.id, "going");
+      expect((await upcomingEvents("someone-else"))[0].mark).toBeNull();
+      // A later run that fails for one site keeps that site's events and the user's plan.
+      meetupFails = true;
+      const second = await refreshEvents();
+      expect(second.sources[1]).toMatchObject({ source: "meetup", error: expect.stringContaining("403") });
+      list = await upcomingEvents(USER);
+      expect(list).toHaveLength(2);
+      expect(list[0]).toMatchObject({ id: swift.id, mark: "going" });
+
+      await setEventMark(USER, swift.id, null);
+      expect((await upcomingEvents(USER))[0].mark).toBeNull();
+
+      // Finished events are pruned on the next run (Meetup is still failing, so it can't refresh this one).
+      await db.update(events).set({ startsAt: inDays(-5), endsAt: inDays(-4) }).where(eq(events.externalId, "101"));
+      await refreshEvents();
+      expect((await db.select().from(events)).map((e) => e.externalId).sort()).toEqual(["evt-1", "evt-3"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

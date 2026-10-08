@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run db:migrate && npm run build",
-  "regions": ["sin1"],
+  "regions": ["cle1"],
   "crons": [{ "path": "/api/sync", "schedule": "30 1 * * *" }]
 }

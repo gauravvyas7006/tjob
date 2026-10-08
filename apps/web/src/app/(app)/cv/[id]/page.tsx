@@ -61,6 +61,9 @@ export default async function CvVersionPage(props: PageProps<"/cv/[id]">) {
               Preview
             </a>
           </Button>
+          <Button asChild variant="outline">
+            <Link href={`/copy?v=${v.id}`}>Quick copy</Link>
+          </Button>
           <DeleteVersion id={v.id} />
         </div>
       </div>

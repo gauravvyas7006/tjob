@@ -1,13 +1,26 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Briefcase, FileText, Inbox, LayoutDashboard, Settings } from "lucide-react";
+import {
+  BarChart3,
+  Briefcase,
+  Building2,
+  CalendarDays,
+  ClipboardCopy,
+  FileText,
+  Inbox,
+  LayoutDashboard,
+  Settings,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/applications", label: "Applications", icon: Briefcase },
+  { href: "/agencies", label: "Agencies", icon: Building2 },
+  { href: "/events", label: "Events", icon: CalendarDays },
   { href: "/cv", label: "CV", icon: FileText },
+  { href: "/copy", label: "Quick copy", icon: ClipboardCopy },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/insights", label: "Insights", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },

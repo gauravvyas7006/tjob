@@ -42,6 +42,9 @@ export default async function CvPage() {
           master && (
             <>
               <Button asChild variant="outline">
+                <Link href="/copy">Quick copy</Link>
+              </Button>
+              <Button asChild variant="outline">
                 <a href="/api/cv/master/pdf?inline=1" target="_blank" rel="noreferrer">
                   Preview ATS PDF
                 </a>

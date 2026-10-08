@@ -108,6 +108,59 @@ export const CATEGORY_TO_STATUS: Partial<Record<EmailCategory, ApplicationStatus
   rejection: "rejected",
 };
 
+export const AGENCY_KINDS = ["staffing", "recruiter", "search", "platform"] as const;
+export type AgencyKind = (typeof AGENCY_KINDS)[number];
+
+export const AGENCY_KIND_LABELS: Record<AgencyKind, string> = {
+  staffing: "IT staffing",
+  recruiter: "Recruitment firm",
+  search: "Executive search",
+  platform: "Hiring platform",
+};
+
+export const AGENCY_STATUSES = ["to_contact", "contacted", "in_touch", "not_useful"] as const;
+export type AgencyStatus = (typeof AGENCY_STATUSES)[number];
+
+export const AGENCY_STATUS_LABELS: Record<AgencyStatus, string> = {
+  to_contact: "To contact",
+  contacted: "Contacted",
+  in_touch: "In touch",
+  not_useful: "Not useful",
+};
+
+export const EVENT_SOURCES = ["luma", "meetup", "eventbrite"] as const;
+export type EventSource = (typeof EVENT_SOURCES)[number];
+
+export const EVENT_SOURCE_LABELS: Record<EventSource, string> = {
+  luma: "Luma",
+  meetup: "Meetup",
+  eventbrite: "Eventbrite",
+};
+
+export const EVENT_TOPICS = ["ai", "java", "javascript", "cloud", "data", "security", "dev", "startups"] as const;
+export type EventTopic = (typeof EVENT_TOPICS)[number];
+
+export const EVENT_TOPIC_LABELS: Record<EventTopic, string> = {
+  ai: "AI & ML",
+  java: "Java",
+  javascript: "JavaScript & Node",
+  cloud: "Cloud & DevOps",
+  data: "Data",
+  security: "Security",
+  dev: "Software dev",
+  startups: "Startups",
+};
+
+/** The user's own plan for an event. "hidden" removes it from the list. */
+export const EVENT_MARKS = ["interested", "going", "hidden"] as const;
+export type EventMark = (typeof EVENT_MARKS)[number];
+
+export const EVENT_MARK_LABELS: Record<EventMark, string> = {
+  interested: "Interested",
+  going: "Going",
+  hidden: "Not for me",
+};
+
 export const AI_FEATURES = [
   "classify_email",
   "extract_jd",

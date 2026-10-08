@@ -6,7 +6,8 @@ A personal job-search dashboard for LinkedIn and Naukri. It:
 - **reads your job mailbox** over IMAP, so confirmations, "viewed" notices, rejections and interview invites update applications automatically;
 - **tailors an ATS-friendly CV** for each job description with Claude, and downloads it as a PDF. It rewords your real experience in the job's terms and never invents skills; anything the job asks for that your CV can't back up is listed as a gap;
 - shows **market insights** from every job description you collect: most-requested skills, trends, role mix, experience asked for, salary ranges, and "skills to learn next";
-- comes with a **Chrome extension** that saves jobs, tailors your CV, autofills application forms, and records applications. You always click Submit yourself.
+- comes with a **Chrome extension** that saves jobs, tailors your CV, autofills application forms, and records applications. You always click Submit yourself;
+- lists **Bengaluru recruitment agencies** to approach, and **upcoming AI and tech events** in Bengaluru (read twice a day from the public Luma, Meetup and Eventbrite listings, with free events shown first).
 
 Costs: hosting is free (Vercel Hobby, Neon free, GitHub Actions). Claude usage is about $7.50 a month for 300 applications and 150 tailored CVs, with a hard monthly cap (default $10).
 
@@ -57,11 +58,12 @@ Only `OWNER_EMAIL` can create the account, and only once.
 
 ## Deploy (Vercel + Neon)
 
-1. **Neon:** create a free project (Singapore region), then copy the pooled connection string (`DATABASE_URL`) and the direct one (`DATABASE_URL_UNPOOLED`).
+1. **Neon:** create a free project, then copy the pooled connection string (`DATABASE_URL`) and the direct one (`DATABASE_URL_UNPOOLED`: the same address without `-pooler`).
 2. **Vercel:**
    - Add New Project → import this GitHub repo → **Root Directory: `apps/web`**.
-   - Add the environment variables from `.env.example`. Set `BETTER_AUTH_URL` to your Vercel URL.
-   - Deploy. The build runs the database migrations automatically (`vercel.json`), and functions run in `sin1` to sit next to Neon.
+   - Add the environment variables from `.env.example`, except `BETTER_AUTH_URL`: on Vercel, tjob uses its own address automatically.
+   - Deploy. The build runs the database migrations automatically (`vercel.json`).
+   - Functions run in the Vercel region set in `vercel.json`, which must match your Neon region, because every page makes several database queries. It's `cle1` (Cleveland), for Neon's AWS US East 2 (Ohio). For Neon's Singapore region, use `sin1`.
 3. **GitHub:** in the repo, go to Settings → Secrets and variables → Actions, and add:
    - `TJOB_URL`: your Vercel URL;
    - `CRON_SECRET`: the same value as on Vercel.
