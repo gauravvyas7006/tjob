@@ -4,7 +4,8 @@ A personal job-search dashboard for LinkedIn and Naukri. It:
 
 - **tracks every application** and its status (saved → applied → viewed → assessment → interview → offer / rejected / ghosted);
 - **reads your job mailbox** over IMAP, so confirmations, "viewed" notices, rejections and interview invites update applications automatically;
-- **tailors an ATS-friendly CV** for each job description with Claude, and downloads it as a PDF. It rewords your real experience in the job's terms and never invents skills; anything the job asks for that your CV can't back up is listed as a gap;
+- **tailors an ATS-friendly CV** for each job description with Claude, and downloads it as a PDF. It rewords your real experience in the job's terms and never invents skills; anything the job asks for that your CV can't back up is listed as a gap. The **Tailor CV** chat takes a pasted job description and follow-up requests ("lead with my Node.js work"), and can suggest, for each gap, a line from your real projects for you to confirm;
+- **tests each tailored CV like an ATS**: it reads the downloaded PDF back and scores it out of 100 (readable file, required skills, keywords, job title, years, degree, location, content), with a fix for every issue. Tailoring fixes what it honestly can on its own: the headline leads with the job's title, the job's own wording is used for skills you have, and the CV is trimmed to two pages;
 - shows **market insights** from every job description you collect: most-requested skills, trends, role mix, experience asked for, salary ranges, and "skills to learn next";
 - comes with a **Chrome extension** that saves jobs, tailors your CV, autofills application forms, and records applications. You always click Submit yourself;
 - lists **Bengaluru recruitment agencies** to approach, and **upcoming AI and tech events** in Bengaluru (read twice a day from the public Luma, Meetup and Eventbrite listings, with free events shown first).

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  polishExtraFactsAction,
   saveExtraFactsAction,
   saveMasterCvAction,
   startBlankCvAction,
@@ -47,28 +48,56 @@ export function MasterEditor({ initial }: { initial: Cv }) {
 
 export function ExtraFacts({ initial }: { initial: string }) {
   const [value, setValue] = useState(initial);
-  const [pending, start] = useTransition();
+  const [fixed, setFixed] = useState(false);
+  const [saving, startSave] = useTransition();
+  const [fixing, startFix] = useTransition();
   return (
     <div className="grid gap-2">
       <Textarea
-        rows={6}
+        rows={8}
         value={value}
         onChange={(e) => setValue(e.target.value)}
+        aria-label="Extra facts"
+        className="max-h-96 overflow-y-auto"
         placeholder={"- On MARS I built the notification service with Node.js and Kafka (~50k msgs/day)\n- Wrote Jenkins pipelines for 6 microservices"}
       />
-      <div>
+      {fixed && value !== initial && (
+        <p className="text-xs text-muted-foreground" role="status">
+          Spelling fixed. Check nothing changed in meaning, then save.
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
           size="sm"
-          disabled={pending || value === initial}
+          disabled={saving || fixing || value === initial}
           onClick={() =>
-            start(async () => {
+            startSave(async () => {
               const res = await saveExtraFactsAction(value);
-              if (res?.ok) toast.success(res.message);
+              if (res?.ok) {
+                toast.success(res.message);
+                setFixed(false);
+              }
             })
           }
         >
-          {pending ? "Saving…" : "Save extra facts"}
+          {saving ? "Saving…" : "Save extra facts"}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={saving || fixing || value.trim().length < 5}
+          onClick={() =>
+            startFix(async () => {
+              const res = await polishExtraFactsAction(value);
+              if (res.ok) {
+                setValue(res.text);
+                setFixed(true);
+              } else toast.error(res.message);
+            })
+          }
+        >
+          {fixing ? "Fixing…" : "Fix spelling and wording"}
         </Button>
       </div>
     </div>

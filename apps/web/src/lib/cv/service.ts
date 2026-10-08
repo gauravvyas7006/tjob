@@ -1,6 +1,6 @@
 import "server-only";
 import { and, asc, count, desc, eq, max } from "drizzle-orm";
-import { applyTailorPatch, type Cv } from "@tjob/shared";
+import { applyTailorPatch, cvToPlainText, type Cv } from "@tjob/shared";
 import { applications, cvVersions, db, jobs, masterCv } from "@/db";
 import { tailorCv } from "@/lib/ai/tailor-cv";
 import { applicationForJob, changeStatus, addEvent } from "@/lib/applications";
@@ -70,7 +70,10 @@ export async function tailorForJob(
     focusNote: opts.focusNote,
   });
   const title = [jd.title || job.title, job.company || jd.company].filter(Boolean).join(" · ") || "Tailored CV";
-  const fixed = await atsAutoFix(applyTailorPatch(master.data, patch), jd, title, { learning });
+  const fixed = await atsAutoFix(applyTailorPatch(master.data, patch), jd, title, {
+    learning,
+    facts: `${cvToPlainText(master.data)}\n${master.extraFacts}`,
+  });
   const tailored = fixed.cv;
   const before = atsScore(master.data, jd);
   const after = atsScore(tailored, jd);
@@ -179,7 +182,18 @@ export async function updateCvVersion(userId: string, id: string, data: Cv): Pro
     .where(eq(cvVersions.id, id));
 }
 
-export function cvFileName(cv: Cv, title: string): string {
+/** The CV behind a download link: a tailored version by id, or the master CV for "master". */
+export async function cvForDownload(userId: string, id: string): Promise<{ cv: Cv; title: string } | null> {
+  if (id === "master") {
+    const master = await getMasterCv(userId);
+    return master ? { cv: master.data, title: master.data.headline || "CV" } : null;
+  }
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const version = await getCvVersion(userId, id);
+  return version ? { cv: version.data, title: version.title } : null;
+}
+
+export function cvFileName(cv: Cv, title: string, ext: "pdf" | "docx" = "pdf"): string {
   const name = cv.contact.name || "CV";
   const clean = (s: string) =>
     s
@@ -189,5 +203,5 @@ export function cvFileName(cv: Cv, title: string): string {
       .replace(/\s+/g, "_")
       .slice(0, 60);
   const parts = [name, ...title.split("·").map((s) => s.trim())].map(clean).filter(Boolean);
-  return parts.join("_") + ".pdf";
+  return `${parts.join("_")}.${ext}`;
 }

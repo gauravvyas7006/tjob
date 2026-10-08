@@ -39,6 +39,7 @@ const SKILLS: readonly SkillDef[] = [
   ["SQL", "language", ["sql"]],
   ["PL/SQL", "language", ["pl/sql", "plsql"]],
   ["Bash", "language", ["bash", "shell scripting", "shell script", "unix shell"]],
+  ["PowerShell", "language", ["powershell", "power shell"]],
   // backend
   ["Spring Boot", "backend", ["spring boot", "springboot", "spring-boot"]],
   ["Spring", "backend", ["spring framework", "spring", "spring core"]],
@@ -109,7 +110,9 @@ const SKILLS: readonly SkillDef[] = [
   ["GCP", "cloud", ["gcp", "google cloud", "google cloud platform"]],
   ["Serverless", "cloud", ["serverless"]],
   // devops
-  ["Docker", "devops", ["docker", "containerization", "docker compose"]],
+  ["Docker", "devops", ["docker", "docker compose"]],
+  ["Containerization", "devops", ["containerization", "containerisation", "containerized", "containerised", "containers"]],
+  ["Infrastructure as Code", "devops", ["infrastructure as code", "iac"]],
   ["Kubernetes", "devops", ["kubernetes", "k8s", "eks", "aks", "gke"]],
   ["OpenShift", "devops", ["openshift"]],
   ["Helm", "devops", ["helm"]],
@@ -129,6 +132,8 @@ const SKILLS: readonly SkillDef[] = [
   ["JUnit", "testing", ["junit", "junit5", "junit 5"]],
   ["Mockito", "testing", ["mockito"]],
   ["Jest", "testing", ["jest"]],
+  ["Integration Testing", "testing", ["integration testing", "integration tests", "integration test"]],
+  ["ESLint", "tool", ["eslint"]],
   ["Mocha", "testing", ["mocha", "chai"]],
   ["Selenium", "testing", ["selenium"]],
   ["Cypress", "testing", ["cypress"]],
@@ -168,6 +173,10 @@ const SKILLS: readonly SkillDef[] = [
   ["Performance Tuning", "practice", ["performance tuning", "performance optimization"]],
   ["Caching", "practice", ["caching"]],
   ["Security/OWASP", "practice", ["owasp", "application security"]],
+  ["Cybersecurity", "practice", ["cybersecurity", "cyber security", "cyber-security", "information security", "infosec"]],
+  ["Cloud-Native", "practice", ["cloud native", "cloud-native"]],
+  ["Design Documentation", "practice", ["design documents", "design document", "design docs", "technical design documents"]],
+  ["Static Analysis", "testing", ["static analysis", "static code analysis", "sast"]],
   // tools
   ["Git", "tool", ["git", "github", "gitlab", "bitbucket"]],
   ["Maven", "tool", ["maven"]],
@@ -247,12 +256,41 @@ export function textHasSkill(text: string, skill: string): boolean {
   if (!phrase) return false;
   if (new RegExp(BEFORE + escapeRegex(phrase) + AFTER, "i").test(lower)) return true;
   const words = phrase.split(/[\s-]+/);
-  const stems = words.map((w) => (w.length >= 5 && /^[a-z]+$/.test(w) ? `${w.replace(/(ing|ed|es|s)$/, "")}[a-z]*` : escapeRegex(w)));
-  return new RegExp(BEFORE + stems.join("[\\s-]+") + AFTER, "i").test(lower);
+  // Other endings ("tests" for "testing") and British/American spelling ("containerisation").
+  const stem = (w: string) =>
+    w.length >= 5 && /^[a-z]+$/.test(w)
+      ? `${w.replace(/(ing|ed|es|s)$/, "").replace(/i[sz](?=ation$|e$|$)/, "i[sz]")}[a-z]*`
+      : escapeRegex(w);
+  if (new RegExp(BEFORE + words.map(stem).join("[\\s-]+") + AFTER, "i").test(lower)) return true;
+  return nearbyWords(lower, words);
+}
+
+/**
+ * Two- or three-word requirements written the other way round in a CV: "API development" in
+ * "developed REST APIs", "payment gateway integration" in "integrated the payment gateway".
+ * Every word (any ending) within a few words of the others.
+ */
+function nearbyWords(lower: string, words: string[]): boolean {
+  if (words.length < 2 || words.length > 3 || words.some((w) => w.length < 3)) return false;
+  const patterns = words.map((w) =>
+    /^[a-z]+$/.test(w) && w.length >= 5
+      ? new RegExp(`^${w.replace(/(ments?|ations?|ions?|ing|ers?|ed|es|s)$/, "").replace(/i[sz](?=ation$|e$|$)/, "i[sz]")}[a-z]*$`)
+      : new RegExp(`^${escapeRegex(w)}s?$`),
+  );
+  const span = words.length + 3;
+  // Within one sentence or bullet: "...the API team. Later, development..." doesn't count.
+  for (const sentence of lower.split(/[.;!?]\s|\n/)) {
+    const tokens = sentence.match(/[a-z0-9+#.]+/g) ?? [];
+    for (let i = 0; i < tokens.length; i++) {
+      const window = tokens.slice(i, i + span);
+      if (patterns.every((p) => window.some((t) => p.test(t.replace(/\.$/, ""))))) return true;
+    }
+  }
+  return false;
 }
 
 const GENERIC_WORDS =
-  /\b(api|apis|development|developer|framework|frameworks|tool|tools|tooling|experience|knowledge|skills?|basics|concepts|programming|language|languages|scripting|technology|technologies)\b/gi;
+  /\b(api|apis|development|developer|design|framework|frameworks|tool|tools|tooling|experience|knowledge|skills?|basics|concepts|programming|language|languages|scripting|technology|technologies)\b/gi;
 
 /**
  * Ways a job requirement can appear in a CV, the requirement as written first: without versions
@@ -269,7 +307,7 @@ export function requirementVariants(requirement: string): string[] {
   const bracket = noVersion.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
   if (bracket?.[1] && bracket[2]) candidates.push(bracket[1], bracket[2]);
   for (const c of [...candidates]) {
-    const pieces = c.split(/\s+or\s+|\s*,\s*|\s*\/\s*/i).map((p) => p.trim());
+    const pieces = c.split(/\s+and\s*\/\s*or\s+|\s+(?:and|or|&)\s+|\s*,\s*|\s*\/\s*/i).map((p) => p.trim());
     if (pieces.length > 1 && pieces.some((p) => ALIAS_TO_CANONICAL.has(p.toLowerCase()))) candidates.push(...pieces);
   }
   for (const c of candidates) {
@@ -277,6 +315,8 @@ export function requirementVariants(requirement: string): string[] {
     const plain = c.replace(GENERIC_WORDS, " ").replace(/\s+/g, " ").trim();
     if (plain.length >= 2) out.add(plain);
   }
+  // "Express" is listed as "Express.js" in CVs (the bare word is too common to be an alias).
+  for (const v of [...out]) if (!/\.js$/i.test(v) && ALIAS_TO_CANONICAL.has(`${v.toLowerCase()}.js`)) out.add(`${v}.js`);
   return [...out].filter((v) => v.length >= 2);
 }
 

@@ -9,6 +9,7 @@ import { EmptyState, PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BlankCvButton, ExtraFacts, MasterEditor, TailorForm, UploadCv } from "./client";
+import { CvFileCheck } from "./file-check";
 
 export const metadata = { title: "CV" };
 export const maxDuration = 120;
@@ -54,6 +55,9 @@ export default async function CvPage() {
               <Button asChild variant="outline">
                 <a href="/api/cv/master/pdf">Download PDF</a>
               </Button>
+              <Button asChild variant="outline">
+                <a href="/api/cv/master/docx">Word (.docx)</a>
+              </Button>
             </>
           )
         }
@@ -78,7 +82,11 @@ export default async function CvPage() {
             <h2 className="font-medium">Tailor for a job</h2>
             <p className="mb-4 text-sm text-muted-foreground">
               Paste a job description to get a version of your CV aimed at it (about $0.03). Using the Chrome extension
-              does this straight from the LinkedIn or Naukri page.
+              does this straight from the LinkedIn or Naukri page. For follow-up changes in a chat, use{" "}
+              <Link href="/tailor" className="underline">
+                Tailor CV
+              </Link>
+              .
             </p>
             <TailorForm />
           </section>
@@ -135,6 +143,15 @@ export default async function CvPage() {
                 </TableBody>
               </Table>
             )}
+          </section>
+
+          <section className="mb-6 rounded-xl border bg-card p-5">
+            <h2 className="font-medium">How an ATS reads your CV</h2>
+            <p className="mb-3 text-sm text-muted-foreground">
+              Designed CVs (two columns, icons, text boxes) often come out scrambled in applicant tracking systems.
+              This reads your uploaded file the way they do and compares it with tjob&apos;s PDF. Free, no AI.
+            </p>
+            <CvFileCheck />
           </section>
 
           <section className="mb-6 rounded-xl border bg-card p-5">

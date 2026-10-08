@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { emptyCv, type Cv, type JdExtraction } from "@tjob/shared";
+import { cvToPlainText, emptyCv, type Cv, type JdExtraction } from "@tjob/shared";
 import { unsupportedSkills } from "./ats";
 import { atsCheck, LEARNING_CATEGORY } from "./ats-check";
-import { atsAutoFix, cleanJobTitle, fitToPages, headlineForJob, withLearningSkills } from "./ats-fix";
+import {
+  atsAutoFix,
+  cleanJobTitle,
+  fitToPages,
+  headlineForJob,
+  STATED_CATEGORY,
+  withLearningSkills,
+  withStatedKeywords,
+} from "./ats-fix";
 import { pageCount, readPdf } from "./ats-test";
 import { renderCvPdf } from "./render";
 
@@ -123,7 +131,72 @@ describe("automatic ATS fixes", () => {
   }, 60000);
 });
 
+describe("job keywords the candidate already states", () => {
+  const job: JdExtraction = {
+    ...jd,
+    requiredSkills: ["Unit Testing", "Docker/Containerization", "Kafka"],
+    niceToHaveSkills: [],
+    keywords: ["Agile/Scrum", "Cybersecurity"],
+  };
+
+  it("adds them under the job's words, narrowly, and never claims what the facts don't say", () => {
+    const facts = "Wrote unit tests with Jest. Deployed services with containers. Worked in agile sprints. Did cyber security testing.";
+    const { cv: out, added } = withStatedKeywords(cv(), job, facts);
+    expect(added).toEqual(["Unit Testing", "Containerization", "Agile", "Cybersecurity"]);
+    expect(out.skills.find((g) => g.category === STATED_CATEGORY)?.items).toEqual(added);
+    // Not "Docker" (the facts say containers), not "Scrum", not "Kafka".
+    expect(added).not.toContain("Docker");
+    expect(added.join(" ")).not.toMatch(/Scrum|Kafka/);
+    expect(unsupportedSkills(cv(), facts, out)).toEqual([]);
+  });
+
+  it("adds nothing the CV already has, and nothing without facts", () => {
+    const has = cv();
+    has.skills.push({ category: "Testing", items: ["Unit Testing"] });
+    expect(withStatedKeywords(has, job, "wrote unit tests").added).toEqual([]);
+    expect(withStatedKeywords(cv(), job, "").added).toEqual([]);
+  });
+
+  it("goes before the Currently learning list, so learning only lists what's really missing", async () => {
+    const { cv: out, learning } = await atsAutoFix(cv(), { ...job, requiredSkills: ["Unit Testing", "Kafka"] }, "t", {
+      learning: true,
+      facts: "wrote unit tests",
+    });
+    expect(out.skills.map((g) => g.category).slice(-2)).toEqual([STATED_CATEGORY, LEARNING_CATEGORY]);
+    expect(learning).toEqual(["Kafka"]);
+  });
+});
+
+describe("invented-skill check", () => {
+  it("accepts the user's own facts despite typos, but not look-alike technologies", () => {
+    const master = cv();
+    const facts = "secured MARS by preventing SQL inje3ction, rate liumiting and rotating keys; web scrabing; used powerbash and containers";
+    const tailored = structuredClone(master);
+    tailored.skills.push({
+      category: "Security",
+      items: ["SQL injection prevention", "Rate limiting", "Key rotation", "Web scraping", "Containerisation", "Bash"],
+    });
+    expect(unsupportedSkills(master, facts, tailored)).toEqual([]);
+    const invented = structuredClone(master);
+    invented.skills.push({ category: "Other", items: ["React", "Java", "Kubernetes", "PowerShell"] });
+    expect(unsupportedSkills(master, "reach out to data teams", invented).sort()).toEqual(["Java", "Kubernetes", "PowerShell", "React"]);
+  });
+});
+
 describe("CV PDF layout", () => {
+  it("never hyphenates words across lines, so keywords stay whole", async () => {
+    const c = cv();
+    // Slide the long words across every position on the line, so some land at the line end.
+    c.experience[0].bullets = Array.from(
+      { length: 60 },
+      (_, i) => `Built ${"x".repeat(i + 1)} reporting pipelines on PostgreSQL and Elasticsearch for analytics teams worldwide`,
+    );
+    const { text } = await readPdf(await renderCvPdf(c, "t"));
+    expect(text).not.toMatch(/[A-Za-z]-\n[a-z]/);
+    const source = cvToPlainText(c);
+    for (const word of [/PostgreSQL/g, /Elasticsearch/g]) expect(text.match(word)?.length).toBe(source.match(word)?.length);
+  }, 30000);
+
   it("skips links without an address instead of printing empty separators", async () => {
     const { text } = await readPdf(await renderCvPdf(cv(), "t"));
     expect(text).toContain("github.com/test-candidate");

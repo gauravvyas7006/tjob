@@ -80,6 +80,21 @@ describe("skills", () => {
     expect(["Python 3.7+", "VueJS 2/3", "Unit Testing", "PowerShell/Bash", "Gitlab / Git", "Containerisation (Docker)", "MySQL/PostgreSQL"].filter((r) => !has(r))).toEqual([]);
     expect(["Flask API", "CI/CD", "Kafka", "Unit/Integration/Behavioral testing"].filter(has)).toEqual([]);
     expect(keywordCoverage(cv, ["Python 3.7+", "Flask API"]).missing).toEqual(["Flask API"]);
+    expect(textHasRequirement("Containerisation with Docker Compose", "Containerization")).toBe(true);
+    expect(textHasRequirement("Node.js, Express.js, REST APIs", "Express")).toBe(true);
+    expect(textHasRequirement("Node.js, Express.js, REST APIs", "REST API design")).toBe(true);
+    // The same thing in the CV's own word order.
+    expect(textHasRequirement("Developed REST APIs for the mobile app", "API Development")).toBe(true);
+    expect(textHasRequirement("Integrated the Razorpay payment gateway", "Payment gateway integration")).toBe(true);
+    expect(textHasRequirement("Led the API team. Later, development of reports in a separate unit", "API Development")).toBe(false);
+    expect(textHasRequirement("Built dashboards", "Payment gateway integration")).toBe(false);
+    // Common spellings in job descriptions vs CVs.
+    expect(textHasRequirement("Did cyber security testing on AWS", "Cybersecurity")).toBe(true);
+    expect(textHasRequirement("Deployed with containers", "Docker/Containerization")).toBe(true);
+    expect(textHasRequirement("Deployed with containers", "Docker")).toBe(false);
+    expect(textHasRequirement("Cloud native services on AWS", "Cloud-native")).toBe(true);
+    expect(textHasRequirement("Wrote PowerShell scripts", "PowerShell and/or Bash Scripting")).toBe(true);
+    expect(textHasRequirement("Optimised queries", "query optimization")).toBe(false);
   });
 
   it("quick-matches a JD against user skills", () => {

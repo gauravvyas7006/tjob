@@ -37,8 +37,11 @@ export type ExtSaveResponse = z.infer<typeof extSaveResponseSchema>;
 
 export const extTailorResponseSchema = z.object({
   cvVersionId: z.string(),
+  /** ATS test score out of 100 (keyword match % from older servers). */
   atsBefore: z.number(),
   atsAfter: z.number(),
+  /** "Strong chance", "Good chance"… Empty from older servers, which only sent keyword match %. */
+  atsBand: z.string().default(""),
   gaps: z.array(z.string()),
   pdfUrl: z.string(),
   editUrl: z.string(),

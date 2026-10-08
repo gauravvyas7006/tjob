@@ -61,12 +61,77 @@ export async function suggestFact(
   });
 }
 
+const SUGGEST_ALL_SYSTEM = `${SUGGEST_SYSTEM}
+
+You get several requirements at once. Return one suggestion per requirement, in the same order, with "requirement" copied exactly.`;
+
+const suggestionsSchema = z.object({
+  suggestions: z.array(suggestionSchema.extend({ requirement: z.string() })),
+});
+export type GapSuggestion = z.infer<typeof suggestionsSchema>["suggestions"][number];
+
+/** "Suggest lines for all gaps": one draft per gap from the candidate's real work, in one call. */
+export async function suggestFactsForGaps(
+  userId: string,
+  input: { cv: Cv; extraFacts: string; gaps: { requirement: string; note: string }[] },
+): Promise<GapSuggestion[]> {
+  const gaps = input.gaps.slice(0, 12);
+  const out = await callFast({
+    userId,
+    feature: "fact_suggest",
+    system: SUGGEST_ALL_SYSTEM,
+    user: [
+      "CV:",
+      truncate(cvBrief(input.cv), 9000),
+      "",
+      "EXTRA FACTS:",
+      truncate(input.extraFacts.trim() || "(none)", 4000),
+      "",
+      "REQUIREMENTS:",
+      ...gaps.map((g, i) => `${i + 1}. ${g.requirement}${g.note ? ` (why it looks missing: ${g.note})` : ""}`),
+    ].join("\n"),
+    schema: suggestionsSchema,
+    maxTokens: 2500,
+  });
+  // Keep the model's answers lined up with the gaps even if it reorders or drops one.
+  return gaps.map(
+    (g) =>
+      out.suggestions.find((s) => s.requirement.trim() === g.requirement.trim()) ?? {
+        requirement: g.requirement,
+        related: false,
+        draft: "",
+        condition: "",
+        basedOn: "",
+      },
+  );
+}
+
 const POLISH_SYSTEM = `You turn a job seeker's rough note about their experience into clean CV wording.
 
 - Fix spelling, grammar and word choice. Write 1-2 sentences, past tense, each starting with a strong action verb, no first-person pronouns.
 - Keep every fact in the note and add none: no new tools, technologies, numbers, results or employers. If the note is vague, stay vague rather than inventing detail.
 - Use standard names for technologies (e.g. "docker" -> "Docker", "node" -> "Node.js", "aws" -> "AWS").
 - Plain text only.`;
+
+const FACTS_SYSTEM = `You tidy a job seeker's notes about their own work experience ("Extra facts"), which they typed quickly.
+
+- Fix spelling, grammar and technology names ("inje3ction" -> "injection", "powerbash" -> keep the candidate's meaning; if it is unclear whether they mean PowerShell or Bash, write "PowerShell/Bash"; "node" -> "Node.js").
+- One fact per line, each starting with "- ". Split run-on paragraphs into separate facts; keep which project or employer each fact belongs to.
+- Keep every fact, number and name. Add nothing new: no extra tools, results, numbers or claims. Don't merge away details.
+- Plain text, no headings.`;
+
+/** "Fix spelling" for the whole Extra facts box: same facts, cleaner text, one per line. */
+export async function polishExtraFacts(userId: string, text: string): Promise<string> {
+  const out = await callFast({
+    userId,
+    feature: "fact_polish",
+    system: FACTS_SYSTEM,
+    user: `EXTRA FACTS:\n${truncate(text, 12000)}`,
+    schema: z.object({ text: z.string() }),
+    maxTokens: 4000,
+  });
+  return out.text.trim();
+}
 
 /** "Write it myself": rewrites the candidate's rough note without adding anything. */
 export async function polishFact(userId: string, input: { text: string; requirement: string }): Promise<string> {

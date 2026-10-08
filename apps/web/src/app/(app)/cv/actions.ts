@@ -5,8 +5,9 @@ import { and, eq } from "drizzle-orm";
 import { cvSchema, emptyCv, type Cv } from "@tjob/shared";
 import { cvVersions, db, masterCv } from "@/db";
 import { aiErrorMessage } from "@/lib/ai/client";
-import { polishFact, suggestFact } from "@/lib/ai/facts";
+import { polishExtraFacts, polishFact, suggestFact, suggestFactsForGaps, type GapSuggestion } from "@/lib/ai/facts";
 import { parseCvPdf } from "@/lib/ai/parse-cv";
+import { compareCvFiles, type FileReadability } from "@/lib/cv/ats-test";
 import { CvError, getCvVersion, getMasterCv, tailorForJob, updateCvVersion } from "@/lib/cv/service";
 import { pastedJobInput, upsertJob } from "@/lib/jobs";
 import { requireUser } from "@/lib/session";
@@ -105,6 +106,57 @@ export async function polishFactAction(text: string, requirement: string): Promi
   if (text.trim().length < 5) return { ok: false, message: "Write a few words about what you did first." };
   try {
     return { ok: true, text: await polishFact(user.id, { text: text.slice(0, 1500), requirement: requirement.slice(0, 300) }) };
+  } catch (err) {
+    return { ok: false, message: aiErrorMessage(err) };
+  }
+}
+
+/** "Suggest lines for all gaps" on a tailored version: drafts only, nothing is saved. */
+export async function suggestAllGapsAction(
+  versionId: string,
+): Promise<{ ok: true; suggestions: GapSuggestion[] } | { ok: false; message: string }> {
+  const user = await requireUser();
+  const [master, version] = await Promise.all([getMasterCv(user.id), getCvVersion(user.id, versionId)]);
+  if (!master || !version) return { ok: false, message: "That CV version wasn't found." };
+  if (!version.gaps.length) return { ok: false, message: "This version has no gaps." };
+  try {
+    return { ok: true, suggestions: await suggestFactsForGaps(user.id, { cv: master.data, extraFacts: master.extraFacts, gaps: version.gaps }) };
+  } catch (err) {
+    return { ok: false, message: aiErrorMessage(err) };
+  }
+}
+
+/** Saves several confirmed lines to Extra facts at once. */
+export async function appendExtraFactsAction(lines: string[]): Promise<ActionState> {
+  const user = await requireUser();
+  const master = await getMasterCv(user.id);
+  const clean = lines.map((l) => String(l).trim().replace(/^-\s*/, "").slice(0, 1000)).filter((l) => l.length >= 5).slice(0, 20);
+  if (!master || !clean.length) return { ok: false, message: "Nothing to add." };
+  const extraFacts = [master.extraFacts.trim(), ...clean.map((l) => `- ${l}`)].filter(Boolean).join("\n");
+  await db.update(masterCv).set({ extraFacts }).where(eq(masterCv.userId, user.id));
+  revalidatePath("/cv");
+  revalidatePath("/tailor");
+  return { ok: true, message: `Added ${clean.length} ${clean.length === 1 ? "line" : "lines"} to Extra facts.` };
+}
+
+/** "Test how an ATS reads my files": the uploaded CV file next to tjob's PDF. Free, no AI. */
+export async function testCvFilesAction(): Promise<
+  | { ok: true; fileName: string; uploaded: FileReadability | null; tjob: FileReadability }
+  | { ok: false; message: string }
+> {
+  const user = await requireUser();
+  const master = await getMasterCv(user.id);
+  if (!master) return { ok: false, message: "Upload your CV first." };
+  const result = await compareCvFiles(master.data, master.originalPdf ? new Uint8Array(master.originalPdf) : null);
+  return { ok: true, fileName: master.originalFileName, ...result };
+}
+
+/** "Fix spelling" in Extra facts. Returns the tidied text for the user to check; nothing is saved. */
+export async function polishExtraFactsAction(text: string): Promise<FactDraft> {
+  const user = await requireUser();
+  if (text.trim().length < 5) return { ok: false, message: "There's nothing to fix yet." };
+  try {
+    return { ok: true, text: await polishExtraFacts(user.id, text.slice(0, 20000)) };
   } catch (err) {
     return { ok: false, message: aiErrorMessage(err) };
   }

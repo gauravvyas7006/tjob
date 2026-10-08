@@ -68,6 +68,9 @@ export default async function CvVersionPage(props: PageProps<"/cv/[id]">) {
             <a href={`/api/cv/${v.id}/pdf`}>Download PDF</a>
           </Button>
           <Button asChild variant="outline">
+            <a href={`/api/cv/${v.id}/docx`}>Word (.docx)</a>
+          </Button>
+          <Button asChild variant="outline">
             <a href={`/api/cv/${v.id}/pdf?inline=1`} target="_blank" rel="noreferrer">
               Preview
             </a>

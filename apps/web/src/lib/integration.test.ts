@@ -423,6 +423,10 @@ describe("tailor chat", () => {
     const first = await tailorForJob(USER, job.id);
     const second = await tailorForJob(USER, job.id, { focusNote: "  lead with the microservices work  " });
     expect(second.focusNote).toBe("lead with the microservices work");
+    // Automatic ATS fix: the headline leads with the job's title; past job titles stay as they were.
+    expect(second.data.headline).toBe("Java Developer | Java, Spring Boot, Microservices");
+    expect(second.data.experience[0].role).toBe("Software Engineer");
+    expect(second.changes.map((c) => c.section)).toContain("Headline");
     // Every new version comes with an ATS test of its PDF, and the master CV's score for comparison.
     expect(second.atsReport).toMatchObject({ score: expect.any(Number), beforeScore: expect.any(Number), pages: 1 });
     expect(second.atsReport?.items.find((i) => i.id === "required")?.detail).toContain("Missing: Kafka");

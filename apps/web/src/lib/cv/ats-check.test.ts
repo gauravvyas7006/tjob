@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { emptyCv, type Cv, type JdExtraction } from "@tjob/shared";
 import { atsCheck, parseCvDate, yearsOfExperience } from "./ats-check";
-import { atsTest, readPdf } from "./ats-test";
+import { atsTest, fileReadability, readPdf } from "./ats-test";
 import { renderCvPdf } from "./render";
 
 const NOW = new Date("2026-10-08T00:00:00Z");
@@ -103,6 +103,23 @@ describe("ATS check", () => {
     expect(report.score).toBeGreaterThanOrEqual(80);
   });
 
+  it("checks what recruiters notice: opening verbs, LinkedIn, newest job first", () => {
+    const status = (c: Cv) =>
+      Object.fromEntries(
+        atsCheck({ cv: c, jd: jd(), description: "", pdfText: text(c), pages: 1, now: NOW }).items.map((i) => [i.id, i.status]),
+      );
+    expect(status(cv())).toMatchObject({ verbs: "pass", linkedin: "warn", order: "pass" });
+
+    const better = cv();
+    better.contact.links = [{ label: "LinkedIn", url: "https://www.linkedin.com/in/test-candidate" }];
+    expect(status(better).linkedin).toBe("pass");
+
+    const weaker = cv();
+    weaker.experience[0].bullets = ["Responsible for the payments API", "Worked on bug fixes"];
+    weaker.experience.reverse();
+    expect(status(weaker)).toMatchObject({ verbs: "warn", order: "warn" });
+  });
+
   it("holds the band down when a knockout check fails", () => {
     const report = atsCheck({ cv: cv(), jd: jd({ minYears: 8, maxYears: 12 }), description: "", pdfText: text(cv()), pages: 1, now: NOW });
     expect(report.items.find((i) => i.id === "years")?.status).toBe("fail");
@@ -137,6 +154,19 @@ describe("ATS check", () => {
     expect(status).toMatchObject({ text: "fail", contact: "fail", sections: "fail", length: "fail", required: "fail", title: "fail", location: "warn" });
     expect(report.band).toBe("low");
   });
+
+  it("spots a two-column design where the ATS reads the sidebar before the name", async () => {
+    const { createElement: h } = await import("react");
+    const { Document, Page, Text, View, renderToBuffer } = await import("@react-pdf/renderer");
+    const sidebar = h(View, { style: { width: "35%" } }, h(Text, null, "SKILLS"), h(Text, null, "Node.js, Java, PostgreSQL, Docker, AWS, React"), h(Text, null, "LANGUAGES English Hindi"));
+    const main = h(View, { style: { width: "65%" } }, h(Text, null, "Test Candidate"), h(Text, null, "candidate@example.com +91 90000 00000"), h(Text, null, "EXPERIENCE Software Developer, MARS. EDUCATION B.E. ".repeat(6)));
+    const pdf = await renderToBuffer(h(Document, null, h(Page, { size: "A4" }, h(View, { style: { flexDirection: "row" } }, sidebar, main))) as never);
+    const designed = await fileReadability(new Uint8Array(pdf), cv());
+    expect(designed.items.find((i) => i.id === "name")?.status).toBe("fail");
+    const ours = await fileReadability(await renderCvPdf(cv(), "t"), cv());
+    expect(ours.items.find((i) => i.id === "name")?.status).toBe("pass");
+    expect(ours.score).toBeGreaterThan(designed.score);
+  }, 30000);
 
   it("tests the real PDF: text, contact details, headings and keywords survive", async () => {
     const pdf = await renderCvPdf(cv(), "Backend Developer · Acme");

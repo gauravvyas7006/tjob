@@ -143,7 +143,7 @@ export function runSite(site: SiteAdapter, ctx: ContentScriptContext) {
         const r = await api<ExtTailorResponse>("POST", "/api/ext/tailor", { jobId });
         state.tailor = r;
         state.cvVersionId = r.cvVersionId;
-        panel.showTailorResult(r.atsBefore, r.atsAfter, r.gaps, Boolean(site.resumeInput()) || state.job?.applyType === "easy_apply");
+        panel.showTailorResult(r.atsBefore, r.atsAfter, r.atsBand ?? "", r.gaps, Boolean(site.resumeInput()) || state.job?.applyType === "easy_apply");
         panel.message("Review it in tjob before sending.");
         await refreshLookup();
       } else if (action === "autofill") {

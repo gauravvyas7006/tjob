@@ -169,9 +169,10 @@ export class Panel {
     return (this.root.querySelector("textarea") as HTMLTextAreaElement).value.trim();
   }
 
-  showTailorResult(before: number, after: number, gaps: string[], canAttach: boolean) {
+  showTailorResult(before: number, after: number, band: string, gaps: string[], canAttach: boolean) {
     this.el.result.hidden = false;
-    this.el.ats.textContent = `CV ready · ATS match ${before}% → ${after}%${gaps.length ? ` · gaps: ${gaps.slice(0, 3).join(", ")}` : ""}`;
+    const score = band ? `ATS test ${before} → ${after}/100 (${band})` : `ATS match ${before}% → ${after}%`;
+    this.el.ats.textContent = `CV ready · ${score}${gaps.length ? ` · gaps: ${gaps.slice(0, 3).join(", ")}` : ""}`;
     (this.root.querySelector('[data-act="attach"]') as HTMLElement).hidden = !canAttach;
   }
 }

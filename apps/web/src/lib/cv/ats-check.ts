@@ -168,6 +168,22 @@ export function atsCheck({ cv, jd, description, pdfText, pages, now = new Date()
     weight: 10,
   });
 
+  // ATS parsers take the first line as the name; two-column designs often put something else first.
+  const firstName = cv.contact.name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  if (firstName) {
+    const firstLines = pdfText.trim().split(/\n/).slice(0, 2).join(" ").toLowerCase();
+    const top = firstLines.includes(firstName);
+    add({
+      id: "name",
+      group: "read",
+      label: "Name at the top",
+      status: top ? "pass" : "fail",
+      detail: top ? "Your name is the first thing the ATS reads." : "Your name isn't at the start of the text the ATS reads.",
+      fix: "Use a one-column CV with your name as the first line, like the PDF tjob makes.",
+      weight: 3,
+    });
+  }
+
   const hasEmail = /[\w.+-]+@[\w-]+\.[\w.]+/.test(text);
   const hasPhone = (text.match(/(?:\+?\d[\d\s-]{8,}\d)/g) ?? []).some((m) => m.replace(/\D/g, "").length >= 10);
   add({
@@ -339,6 +355,46 @@ export function atsCheck({ cv, jd, description, pdfText, pages, now = new Date()
     fix: "Where you know it, add scale or results: users, requests per day, time saved, % faster. Only true numbers.",
     weight: 3,
   });
+
+  const weak = bullets.filter((b) =>
+    /^(responsible for|worked on|working on|helped|assisted( in| with)?|involved in|participated in|tasked with|duties included|handled)\b/i.test(b.trim()),
+  );
+  add({
+    id: "verbs",
+    group: "content",
+    label: "Strong opening verbs",
+    status: weak.length ? "warn" : "pass",
+    detail: weak.length
+      ? `${weak.length} ${weak.length === 1 ? "bullet starts" : "bullets start"} weakly, e.g. "${weak[0].split(/\s+/).slice(0, 4).join(" ")}…".`
+      : "Bullets lead with what you did.",
+    fix: "Start with what you did: \"Built\", \"Cut\", \"Automated\", \"Led\", not \"Responsible for\" or \"Worked on\".",
+    weight: 2,
+  });
+
+  const hasLinkedIn = cv.contact.links.some((l) => /linkedin\.com\//i.test(l.url));
+  add({
+    id: "linkedin",
+    group: "content",
+    label: "LinkedIn profile",
+    status: hasLinkedIn ? "pass" : "warn",
+    detail: hasLinkedIn ? "Your LinkedIn URL is on the CV." : "No LinkedIn URL on the CV.",
+    fix: "Add your LinkedIn profile URL under Contact on the CV page; most recruiters look you up there.",
+    weight: 1,
+  });
+
+  const starts = cv.experience.map((e) => parseCvDate(e.startDate, now));
+  const outOfOrder = starts.some((s, i) => i > 0 && s !== null && starts[i - 1] !== null && s > starts[i - 1]!);
+  if (cv.experience.length > 1) {
+    add({
+      id: "order",
+      group: "content",
+      label: "Most recent job first",
+      status: outOfOrder ? "warn" : "pass",
+      detail: outOfOrder ? "Your jobs aren't in date order, newest first." : "Jobs are listed newest first.",
+      fix: "Reorder Experience on the CV page so your current or latest job comes first.",
+      weight: 2,
+    });
+  }
 
   const long = bullets.filter((b) => b.split(/\s+/).length > 35).length;
   add({

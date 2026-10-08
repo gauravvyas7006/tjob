@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { AlertTriangle, FileDown, Plus } from "lucide-react";
 import { budgetStatus } from "@/lib/ai/budget";
+import { learningSkills } from "@/lib/cv/ats-check";
 import { ensureAtsReport, getMasterCv, tailorThread, tailorThreads, type CvVersion } from "@/lib/cv/service";
 import { timeAgo } from "@/lib/format";
 import { requireUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { AtsReportCard } from "@/components/ats-report";
 import { GapHelper } from "@/components/gap-helper";
+import { GapSuggestions } from "@/components/gap-suggestions";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Bubble } from "./bubble";
@@ -97,6 +99,9 @@ function Reply({ v, latest }: { v: CvVersion; latest: boolean }) {
           </a>
         </Button>
         <Button asChild size="sm" variant="outline">
+          <a href={`/api/cv/${v.id}/docx`}>Word (.docx)</a>
+        </Button>
+        <Button asChild size="sm" variant="outline">
           <a href={`/api/cv/${v.id}/pdf?inline=1`} target="_blank" rel="noreferrer">
             Preview
           </a>
@@ -113,8 +118,9 @@ function Reply({ v, latest }: { v: CvVersion; latest: boolean }) {
         <p role="alert" className="mt-3 flex gap-2 rounded-lg border border-critical/40 bg-critical/5 p-2">
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-critical" aria-hidden />
           <span>
-            Check before sending: this version mentions {v.unsupported.join(", ")}, which isn&apos;t in your CV or Extra
-            facts. Remove it with Edit by hand, or ask me to leave it out.
+            Check before sending: this version mentions {v.unsupported.join(", ")}, which I can&apos;t find in your CV or
+            Extra facts. If you really have it, add it to Extra facts (or fix its spelling there) and tailor again;
+            otherwise ask me to leave it out, or remove it with Edit by hand.
           </span>
         </p>
       )}
@@ -137,6 +143,7 @@ function Reply({ v, latest }: { v: CvVersion; latest: boolean }) {
             I didn&apos;t add these. If one fits your real work, let me suggest where it fits in your projects, or write
             a rough note and I&apos;ll fix the wording. You check it before it&apos;s saved.
           </p>
+          {latest && v.jobId && <GapSuggestions versionId={v.id} jobId={v.jobId} />}
           <ul className="grid gap-4">
             {v.gaps.map((g, i) => (
               <li key={i}>
@@ -149,6 +156,37 @@ function Reply({ v, latest }: { v: CvVersion; latest: boolean }) {
         </Section>
       )}
     </Bubble>
+  );
+}
+
+function ThreadList({
+  threads,
+  current,
+}: {
+  threads: Awaited<ReturnType<typeof tailorThreads>>;
+  current: string | null;
+}) {
+  return (
+    <nav aria-label="Earlier chats">
+      <ul className="grid gap-1">
+        {threads.map((t) => (
+          <li key={t.jobId}>
+            <Link
+              href={`/tailor?job=${t.jobId}`}
+              aria-current={t.jobId === current ? "page" : undefined}
+              className={cn("block rounded-md px-3 py-2 text-sm", t.jobId === current ? "bg-accent" : "hover:bg-accent/60")}
+            >
+              <span className="block truncate font-medium">{t.title || "Untitled job"}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {[t.company, `${t.versions} ${t.versions === 1 ? "version" : "versions"}`, timeAgo(t.lastAt)]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
   );
 }
 
@@ -202,29 +240,18 @@ export default async function TailorPage(props: PageProps<"/tailor">) {
           </Link>
         </Button>
         {threads.length > 0 && (
-          <nav aria-label="Earlier chats" className="max-h-48 overflow-y-auto lg:max-h-[70vh]">
-            <ul className="grid gap-1">
-              {threads.map((t) => (
-                <li key={t.jobId}>
-                  <Link
-                    href={`/tailor?job=${t.jobId}`}
-                    aria-current={t.jobId === current ? "page" : undefined}
-                    className={cn(
-                      "block rounded-md px-3 py-2 text-sm",
-                      t.jobId === current ? "bg-accent" : "hover:bg-accent/60",
-                    )}
-                  >
-                    <span className="block truncate font-medium">{t.title || "Untitled job"}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {[t.company, `${t.versions} ${t.versions === 1 ? "version" : "versions"}`, timeAgo(t.lastAt)]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
+          <>
+            {/* Phones: folded away so the conversation gets the screen. */}
+            <details className="rounded-md border px-3 py-2 text-sm lg:hidden">
+              <summary className="cursor-pointer text-muted-foreground">Earlier chats ({threads.length})</summary>
+              <div className="mt-2">
+                <ThreadList threads={threads} current={current} />
+              </div>
+            </details>
+            <div className="hidden max-h-[70vh] overflow-y-auto lg:block">
+              <ThreadList threads={threads} current={current} />
+            </div>
+          </>
         )}
       </aside>
 
@@ -246,6 +273,7 @@ export default async function TailorPage(props: PageProps<"/tailor">) {
           key={current ?? "new"}
           jobId={current}
           versionCount={versions.length}
+          initialLearning={latest ? learningSkills(latest.data).length > 0 : false}
           disabledReason={disabledReason}
           footnote={footnote}
         >

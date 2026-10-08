@@ -1,5 +1,9 @@
-import { Document, Link, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { Document, Font, Link, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { Cv } from "@tjob/shared";
+
+// No hyphenation: "Post-/greSQL" across a line break looks wrong and splits the keyword an ATS
+// searches for. Long words move to the next line whole.
+Font.registerHyphenationCallback((word) => [word]);
 
 /*
  * ATS-friendly CV: one column, standard section headings, real selectable text in a standard

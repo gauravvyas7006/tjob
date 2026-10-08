@@ -13,11 +13,12 @@ type Sent = { text: string; kind: "job" | "request" };
 
 const LEARNING_KEY = "tjob.tailor.learning";
 
-function readLearning(): boolean {
+/** The saved choice ("1"/"0"), or null when this browser has none. */
+function readLearning(): string | null {
   try {
-    return localStorage.getItem(LEARNING_KEY) === "1";
+    return localStorage.getItem(LEARNING_KEY);
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -34,12 +35,15 @@ function subscribeStorage(onChange: () => void) {
 export function TailorChat({
   jobId,
   versionCount,
+  initialLearning,
   disabledReason,
   footnote,
   children,
 }: {
   jobId: string | null;
   versionCount: number;
+  /** Whether the latest version lists skills under "Currently learning". */
+  initialLearning: boolean;
   disabledReason: string | null;
   footnote: string;
   children: React.ReactNode;
@@ -49,9 +53,10 @@ export function TailorChat({
   const [sent, setSent] = useState<Sent | null>(null);
   const [error, setError] = useState<string | null>(null);
   // A per-browser preference; without storage the checkbox still works for this visit.
-  const stored = useSyncExternalStore(subscribeStorage, readLearning, () => false);
+  const stored = useSyncExternalStore(subscribeStorage, readLearning, () => null);
   const [override, setOverride] = useState<boolean | null>(null);
-  const learning = override ?? stored;
+  // Without a saved choice, follow the conversation's latest version.
+  const learning = override ?? (stored === null ? initialLearning : stored === "1");
   const [pending, start] = useTransition();
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -158,7 +163,7 @@ export function TailorChat({
                   }
                 }}
                 rows={jobId ? 2 : 5}
-                className="max-h-60 overflow-y-auto"
+                className="max-h-60 overflow-y-auto max-sm:field-sizing-fixed"
                 aria-label={jobId ? "Ask for a change or paste another job description" : "Paste a job description"}
                 placeholder={
                   jobId
