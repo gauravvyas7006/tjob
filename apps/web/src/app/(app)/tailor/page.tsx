@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { AlertTriangle, FileDown, Plus } from "lucide-react";
 import { budgetStatus } from "@/lib/ai/budget";
-import { getMasterCv, tailorThread, tailorThreads, type CvVersion } from "@/lib/cv/service";
+import { ensureAtsReport, getMasterCv, tailorThread, tailorThreads, type CvVersion } from "@/lib/cv/service";
 import { timeAgo } from "@/lib/format";
 import { requireUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
-import { AddFact } from "@/components/add-fact";
+import { AtsReportCard } from "@/components/ats-report";
+import { GapHelper } from "@/components/gap-helper";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Bubble } from "./bubble";
@@ -24,8 +25,11 @@ function Intro() {
       <ul className="mt-2 list-disc space-y-1 pl-5">
         <li>the job&apos;s own keywords, so applicant tracking systems (ATS) match your CV to it;</li>
         <li>your most relevant work and skills first;</li>
-        <li>a score for how many of the job&apos;s keywords your CV covers, before and after;</li>
-        <li>a PDF in a simple one-column layout that ATS software can read.</li>
+        <li>a PDF in a simple one-column layout that ATS software can read;</li>
+        <li>
+          an ATS test of that PDF: a score out of 100 for your chance of getting through automated screening, with what
+          to fix.
+        </li>
       </ul>
       <p className="mt-2 text-muted-foreground">
         I only reword what&apos;s in your CV and Extra facts. Anything the job wants that your CV doesn&apos;t show is
@@ -67,14 +71,17 @@ function Reply({ v, latest }: { v: CvVersion; latest: boolean }) {
       <p>
         Here&apos;s your CV for <strong>{v.title}</strong>.
       </p>
-      <div className="mt-3 rounded-lg border p-3">
-        <div className="text-xs text-muted-foreground">Job keywords your CV covers</div>
-        <div className="text-xl font-semibold tabular-nums">
-          {v.atsBefore}% <span className="text-muted-foreground">→</span> {v.atsAfter}%
-        </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
-          <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, v.atsAfter)}%` }} />
-        </div>
+      <div className="mt-3">
+        {v.atsReport ? (
+          <AtsReportCard report={v.atsReport} open={latest} />
+        ) : (
+          <div className="rounded-lg border p-3">
+            <div className="text-xs text-muted-foreground">Job keywords your CV covers</div>
+            <div className="text-xl font-semibold tabular-nums">
+              {v.atsBefore}% <span className="text-muted-foreground">→</span> {v.atsAfter}%
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -122,31 +129,21 @@ function Reply({ v, latest }: { v: CvVersion; latest: boolean }) {
       {v.gaps.length > 0 && (
         <Section title={`Not in your CV (${v.gaps.length})`} open={latest}>
           <p className="mb-2 text-muted-foreground">
-            I didn&apos;t add these. If you really have one, add a true detail, then ask me to tailor again.
+            I didn&apos;t add these. If one fits your real work, let me suggest where it fits in your projects, or write
+            a rough note and I&apos;ll fix the wording. You check it before it&apos;s saved.
           </p>
-          <ul className="grid gap-3">
+          <ul className="grid gap-4">
             {v.gaps.map((g, i) => (
               <li key={i}>
                 <div className="font-medium">{g.requirement}</div>
                 <div className="text-muted-foreground">{g.note}</div>
-                {latest && <AddFact versionId={v.id} requirement={g.requirement} />}
+                {latest && (
+                  <GapHelper versionId={v.id} requirement={g.requirement} note={g.note} jobId={v.jobId ?? undefined} />
+                )}
               </li>
             ))}
           </ul>
         </Section>
-      )}
-
-      {latest && v.missingKeywords.length > 0 && (
-        <div className="mt-4">
-          <div className="mb-1 text-xs text-muted-foreground">Job keywords still missing from your CV</div>
-          <div className="flex flex-wrap gap-1.5">
-            {v.missingKeywords.map((k) => (
-              <span key={k} className="rounded-md border border-dashed px-2 py-0.5 text-xs">
-                {k}
-              </span>
-            ))}
-          </div>
-        </div>
       )}
     </Bubble>
   );
@@ -188,6 +185,9 @@ export default async function TailorPage(props: PageProps<"/tailor">) {
   const footnote = `about $0.03 per CV · $${budget.spentUsd.toFixed(2)} of $${budget.budgetUsd.toFixed(2)} AI budget used this month`;
   const versions = thread?.versions ?? [];
   const current = thread ? thread.job.id : null;
+  // Versions made before the ATS test existed get tested the first time they're opened.
+  const latest = versions.at(-1);
+  if (latest && !latest.atsReport) latest.atsReport = await ensureAtsReport(user.id, latest);
 
   return (
     <div className="mx-auto grid max-w-6xl gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]">

@@ -168,6 +168,8 @@ export const AI_FEATURES = [
   "parse_cv",
   "autofill_answer",
   "followup_draft",
+  "fact_suggest",
+  "fact_polish",
 ] as const;
 export type AiFeature = (typeof AI_FEATURES)[number];
 
@@ -178,4 +180,6 @@ export const AI_FEATURE_LABELS: Record<AiFeature, string> = {
   parse_cv: "CV reading",
   autofill_answer: "Application answers",
   followup_draft: "Follow-up drafts",
+  fact_suggest: "Gap suggestions from your projects",
+  fact_polish: "Wording fixes",
 };

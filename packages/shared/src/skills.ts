@@ -229,7 +229,10 @@ export function extractSkills(text: string): string[] {
   return [...found];
 }
 
-/** Whether `text` mentions `skill` (canonical or any alias, or the raw phrase for unknown skills). */
+/**
+ * Whether `text` mentions `skill`: canonical or any alias, or for unknown skills the phrase itself,
+ * allowing other word endings ("unit testing" matches "unit tests").
+ */
 export function textHasSkill(text: string, skill: string): boolean {
   const canonical = canonicalSkill(skill);
   const compiled = COMPILED.find((s) => s.canonical === canonical);
@@ -237,7 +240,44 @@ export function textHasSkill(text: string, skill: string): boolean {
   if (compiled) return compiled.patterns.some((p) => p.test(lower));
   const phrase = skill.trim().toLowerCase();
   if (!phrase) return false;
-  return new RegExp(BEFORE + escapeRegex(phrase) + AFTER, "i").test(lower);
+  if (new RegExp(BEFORE + escapeRegex(phrase) + AFTER, "i").test(lower)) return true;
+  const words = phrase.split(/[\s-]+/);
+  const stems = words.map((w) => (w.length >= 5 && /^[a-z]+$/.test(w) ? `${w.replace(/(ing|ed|es|s)$/, "")}[a-z]*` : escapeRegex(w)));
+  return new RegExp(BEFORE + stems.join("[\\s-]+") + AFTER, "i").test(lower);
+}
+
+const GENERIC_WORDS =
+  /\b(api|apis|development|developer|framework|frameworks|tool|tools|tooling|experience|knowledge|skills?|basics|concepts|programming|language|languages|scripting|technology|technologies)\b/gi;
+
+/**
+ * Ways a job requirement can appear in a CV, the requirement as written first: without versions
+ * ("Python 3.7+" → "Python", "VueJS 2/3" → "VueJS"), either side of a pair of known skills
+ * ("PowerShell/Bash"), the part in brackets, and without filler words ("Flask API" → "Flask").
+ */
+export function requirementVariants(requirement: string): string[] {
+  const out = new Set<string>([requirement.trim()]);
+  const noVersion = requirement
+    .replace(/\b(?:v(?:ersion)?\s?)?\d+(?:\.\d+)*(?:\+|\.x)?(?:\s?\/\s?\d+(?:\.\d+)*\+?)*/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const candidates = [noVersion];
+  const bracket = noVersion.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  if (bracket?.[1] && bracket[2]) candidates.push(bracket[1], bracket[2]);
+  for (const c of [...candidates]) {
+    const pieces = c.split(/\s+or\s+|\s*,\s*|\s*\/\s*/i).map((p) => p.trim());
+    if (pieces.length > 1 && pieces.some((p) => ALIAS_TO_CANONICAL.has(p.toLowerCase()))) candidates.push(...pieces);
+  }
+  for (const c of candidates) {
+    out.add(c);
+    const plain = c.replace(GENERIC_WORDS, " ").replace(/\s+/g, " ").trim();
+    if (plain.length >= 2) out.add(plain);
+  }
+  return [...out].filter((v) => v.length >= 2);
+}
+
+/** Whether the CV text covers a job requirement in any of its usual forms. */
+export function textHasRequirement(text: string, requirement: string): boolean {
+  return requirementVariants(requirement).some((v) => textHasSkill(text, v));
 }
 
 export interface KeywordScore {
@@ -264,14 +304,14 @@ export function keywordCoverage(
   let total = 0;
   for (const s of req) {
     total += 2;
-    if (textHasSkill(text, s)) {
+    if (textHasRequirement(text, s)) {
       got += 2;
       matched.push(s);
     } else missing.push(s);
   }
   for (const s of opt) {
     total += 1;
-    if (textHasSkill(text, s)) {
+    if (textHasRequirement(text, s)) {
       got += 1;
       matched.push(s);
     } else missing.push(s);

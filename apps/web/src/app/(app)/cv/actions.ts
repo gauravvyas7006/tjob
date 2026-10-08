@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { cvSchema, emptyCv, type Cv } from "@tjob/shared";
 import { cvVersions, db, masterCv } from "@/db";
 import { aiErrorMessage } from "@/lib/ai/client";
+import { polishFact, suggestFact } from "@/lib/ai/facts";
 import { parseCvPdf } from "@/lib/ai/parse-cv";
 import { CvError, getCvVersion, getMasterCv, tailorForJob, updateCvVersion } from "@/lib/cv/service";
 import { pastedJobInput, upsertJob } from "@/lib/jobs";
@@ -70,10 +71,42 @@ export async function appendExtraFactAction(fact: string, versionId: string): Pr
   const user = await requireUser();
   const master = await getMasterCv(user.id);
   if (!master || !fact.trim()) return { ok: false, message: "Nothing to add." };
-  const extraFacts = [master.extraFacts.trim(), `- ${fact.trim()}`].filter(Boolean).join("\n");
+  const extraFacts = [master.extraFacts.trim(), `- ${fact.trim().slice(0, 1000)}`].filter(Boolean).join("\n");
   await db.update(masterCv).set({ extraFacts }).where(eq(masterCv.userId, user.id));
+  revalidatePath("/cv");
   revalidatePath(`/cv/${versionId}`);
-  return { ok: true, message: "Added to Extra facts. Re-tailor to use it." };
+  return { ok: true, message: "Added to Extra facts. Tailor again to use it." };
+}
+
+export type FactDraft = { ok: true; text: string; condition?: string; basedOn?: string; related?: boolean } | { ok: false; message: string };
+
+/** "Suggest from my projects" for a gap: a draft sentence plus what must be true to use it. */
+export async function suggestFactAction(requirement: string, gapNote: string): Promise<FactDraft> {
+  const user = await requireUser();
+  const master = await getMasterCv(user.id);
+  if (!master) return { ok: false, message: "Upload your CV first." };
+  try {
+    const s = await suggestFact(user.id, {
+      cv: master.data,
+      extraFacts: master.extraFacts,
+      requirement: requirement.slice(0, 300),
+      gapNote: gapNote.slice(0, 500),
+    });
+    return { ok: true, text: s.related ? s.draft : "", condition: s.condition, basedOn: s.basedOn, related: s.related };
+  } catch (err) {
+    return { ok: false, message: aiErrorMessage(err) };
+  }
+}
+
+/** "Write it myself": tidies the user's rough note without adding facts. */
+export async function polishFactAction(text: string, requirement: string): Promise<FactDraft> {
+  const user = await requireUser();
+  if (text.trim().length < 5) return { ok: false, message: "Write a few words about what you did first." };
+  try {
+    return { ok: true, text: await polishFact(user.id, { text: text.slice(0, 1500), requirement: requirement.slice(0, 300) }) };
+  } catch (err) {
+    return { ok: false, message: aiErrorMessage(err) };
+  }
 }
 
 export async function tailorFromJdAction(_prev: ActionState, form: FormData): Promise<ActionState> {

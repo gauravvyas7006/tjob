@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { applications, cvVersions, db } from "@/db";
+import { ATS_BAND_LABELS } from "@/lib/cv/ats-check";
 import { getMasterCv } from "@/lib/cv/service";
 import { requireUser } from "@/lib/session";
 import { formatDate } from "@/lib/format";
@@ -22,6 +23,7 @@ export default async function CvPage() {
         title: cvVersions.title,
         atsBefore: cvVersions.atsBefore,
         atsAfter: cvVersions.atsAfter,
+        atsReport: cvVersions.atsReport,
         createdAt: cvVersions.createdAt,
         appId: applications.id,
         appStatus: applications.status,
@@ -90,7 +92,7 @@ export default async function CvPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Version</TableHead>
-                    <TableHead>ATS match</TableHead>
+                    <TableHead>ATS test</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead className="text-right">Download</TableHead>
                   </TableRow>
@@ -111,7 +113,16 @@ export default async function CvPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-sm tabular-nums">
-                        {v.atsBefore}% → <strong>{v.atsAfter}%</strong>
+                        {v.atsReport ? (
+                          <>
+                            <strong>{v.atsReport.score} / 100</strong>
+                            <div className="text-xs text-muted-foreground">{ATS_BAND_LABELS[v.atsReport.band]}</div>
+                          </>
+                        ) : (
+                          <>
+                            Keywords {v.atsBefore}% → <strong>{v.atsAfter}%</strong>
+                          </>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm">{formatDate(v.createdAt)}</TableCell>
                       <TableCell className="text-right">

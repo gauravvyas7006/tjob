@@ -28,6 +28,7 @@ import type {
   TailorChange,
   TailorGap,
 } from "@tjob/shared";
+import type { AtsReport } from "@/lib/cv/ats-check";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array | string }>({
   dataType() {
@@ -234,6 +235,8 @@ export const cvVersions = pgTable(
     model: text("model").notNull().default(""),
     /** What the user asked for when re-tailoring ("lead with my Node.js work"), shown in the Tailor chat. */
     focusNote: text("focus_note").notNull().default(""),
+    /** ATS test of the PDF against the job (lib/cv/ats-check). null for versions made before it existed. */
+    atsReport: jsonb("ats_report").$type<AtsReport>(),
     ...timestamps,
   },
   (t) => [index("cv_versions_user_created").on(t.userId, t.createdAt)],

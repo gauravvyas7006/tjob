@@ -423,6 +423,9 @@ describe("tailor chat", () => {
     const first = await tailorForJob(USER, job.id);
     const second = await tailorForJob(USER, job.id, { focusNote: "  lead with the microservices work  " });
     expect(second.focusNote).toBe("lead with the microservices work");
+    // Every new version comes with an ATS test of its PDF, and the master CV's score for comparison.
+    expect(second.atsReport).toMatchObject({ score: expect.any(Number), beforeScore: expect.any(Number), pages: 1 });
+    expect(second.atsReport?.items.find((i) => i.id === "required")?.detail).toContain("Missing: Kafka");
 
     const thread = await tailorThread(USER, job.id);
     expect(thread?.versions.map((v) => [v.id, v.focusNote])).toEqual([

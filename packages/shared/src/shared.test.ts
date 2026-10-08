@@ -9,6 +9,8 @@ import {
   normalizeCompany,
   normalizeQuestion,
   quickMatch,
+  requirementVariants,
+  textHasRequirement,
   textHasSkill,
 } from "./index";
 
@@ -63,6 +65,21 @@ describe("skills", () => {
     expect(r.matched).toEqual(["Java", "MySQL"]);
     expect(r.missing).toEqual(["Kafka"]);
     expect(r.score).toBe(60); // (2 + 1) / (4 + 1)
+  });
+
+  it("matches requirements the way they're written in job descriptions", () => {
+    expect(requirementVariants("Python 3.7+")).toContain("Python");
+    expect(requirementVariants("VueJS 2/3")).toContain("VueJS");
+    expect(requirementVariants("Flask API")).toContain("Flask");
+    expect(requirementVariants("Containerisation (Docker)")).toContain("Docker");
+    expect(requirementVariants("CI/CD")).toEqual(["CI/CD"]);
+    expect(requirementVariants("Unit/Integration/Behavioral testing")).not.toContain("Unit");
+
+    const cv = "Skills: Python, Vue.js, Bash, Git, Docker, MySQL. Wrote unit tests with Jest. Business unit reports.";
+    const has = (r: string) => textHasRequirement(cv, r);
+    expect(["Python 3.7+", "VueJS 2/3", "Unit Testing", "PowerShell/Bash", "Gitlab / Git", "Containerisation (Docker)", "MySQL/PostgreSQL"].filter((r) => !has(r))).toEqual([]);
+    expect(["Flask API", "CI/CD", "Kafka", "Unit/Integration/Behavioral testing"].filter(has)).toEqual([]);
+    expect(keywordCoverage(cv, ["Python 3.7+", "Flask API"]).missing).toEqual(["Flask API"]);
   });
 
   it("quick-matches a JD against user skills", () => {

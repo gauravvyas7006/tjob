@@ -3,11 +3,12 @@ import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { AlertTriangle } from "lucide-react";
 import { applications, db } from "@/db";
-import { getCvVersion, getMasterCv } from "@/lib/cv/service";
+import { ensureAtsReport, getCvVersion, getMasterCv } from "@/lib/cv/service";
 import { getJob } from "@/lib/jobs";
 import { requireUser } from "@/lib/session";
 import { formatDate } from "@/lib/format";
-import { AddFact } from "@/components/add-fact";
+import { AtsReportCard } from "@/components/ats-report";
+import { GapHelper } from "@/components/gap-helper";
 import { Button } from "@/components/ui/button";
 import { DeleteVersion, Retailor, VersionEditor } from "./client";
 
@@ -26,10 +27,11 @@ export default async function CvVersionPage(props: PageProps<"/cv/[id]">) {
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const v = await getCvVersion(user.id, id);
   if (!v) notFound();
-  const [master, job, [app]] = await Promise.all([
+  const [master, job, [app], report] = await Promise.all([
     getMasterCv(user.id),
     v.jobId ? getJob(user.id, v.jobId) : null,
     db.select({ id: applications.id }).from(applications).where(eq(applications.cvVersionId, v.id)).limit(1),
+    ensureAtsReport(user.id, v),
   ]);
 
   return (
@@ -41,8 +43,16 @@ export default async function CvVersionPage(props: PageProps<"/cv/[id]">) {
           </Link>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">{v.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Created {formatDate(v.createdAt)} · ATS keyword match {v.atsBefore}% →{" "}
-            <strong className="text-foreground">{v.atsAfter}%</strong>
+            Created {formatDate(v.createdAt)} ·{" "}
+            {report ? (
+              <>
+                ATS test <strong className="text-foreground">{report.score} / 100</strong>
+              </>
+            ) : (
+              <>
+                ATS keyword match {v.atsBefore}% → <strong className="text-foreground">{v.atsAfter}%</strong>
+              </>
+            )}
             {app && (
               <>
                 {" · "}
@@ -81,6 +91,11 @@ export default async function CvVersionPage(props: PageProps<"/cv/[id]">) {
 
       <div className="grid gap-4 lg:grid-cols-5">
         <aside className="grid content-start gap-4 lg:col-span-2">
+          {report && (
+            <section className="rounded-xl bg-card" aria-label="ATS test">
+              <AtsReportCard report={report} />
+            </section>
+          )}
           <section className="rounded-xl border bg-card p-4 text-sm">
             <h2 className="font-medium">Keywords</h2>
             {v.matchedKeywords.length > 0 && (
@@ -117,7 +132,7 @@ export default async function CvVersionPage(props: PageProps<"/cv/[id]">) {
                   <li key={i}>
                     <div className="font-medium">{g.requirement}</div>
                     <div className="text-muted-foreground">{g.note}</div>
-                    <AddFact versionId={v.id} requirement={g.requirement} />
+                    <GapHelper versionId={v.id} requirement={g.requirement} note={g.note} />
                   </li>
                 ))}
               </ul>

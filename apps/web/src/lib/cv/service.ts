@@ -6,6 +6,8 @@ import { tailorCv } from "@/lib/ai/tailor-cv";
 import { applicationForJob, changeStatus, addEvent } from "@/lib/applications";
 import { ensureJobExtracted, getJob } from "@/lib/jobs";
 import { atsScore, unsupportedSkills } from "./ats";
+import type { AtsReport } from "./ats-check";
+import { atsTest } from "./ats-test";
 
 export type CvVersion = typeof cvVersions.$inferSelect;
 export type MasterCv = typeof masterCv.$inferSelect;
@@ -54,13 +56,18 @@ export async function tailorForJob(
   const tailored = applyTailorPatch(master.data, patch);
   const before = atsScore(master.data, jd);
   const after = atsScore(tailored, jd);
+  const title = [jd.title || job.title, job.company || jd.company].filter(Boolean).join(" · ") || "Tailored CV";
+  const [report, masterReport] = await Promise.all([
+    atsTest(tailored, title, jd, job.description),
+    atsTest(master.data, title, jd, job.description),
+  ]);
 
   const [version] = await db
     .insert(cvVersions)
     .values({
       userId,
       jobId: job.id,
-      title: [jd.title || job.title, job.company || jd.company].filter(Boolean).join(" · ") || "Tailored CV",
+      title,
       data: tailored,
       changes: patch.changes,
       gaps: patch.gaps,
@@ -71,6 +78,7 @@ export async function tailorForJob(
       missingKeywords: after.missing,
       model: "claude-sonnet-5-5",
       focusNote: opts.focusNote?.trim().slice(0, 500) ?? "",
+      atsReport: { ...report, beforeScore: masterReport.score },
     })
     .returning();
 
@@ -107,6 +115,24 @@ export async function tailorThread(userId: string, jobId: string) {
   return { job, versions };
 }
 
+/**
+ * The version's ATS test, running it now (and saving it) for versions made before the test
+ * existed. null when the version has no job description to test against.
+ */
+export async function ensureAtsReport(userId: string, version: CvVersion): Promise<AtsReport | null> {
+  if (version.atsReport) return version.atsReport;
+  if (!version.jobId) return null;
+  const [job, master] = await Promise.all([getJob(userId, version.jobId), getMasterCv(userId)]);
+  if (!job?.extracted) return null;
+  const [report, masterReport] = await Promise.all([
+    atsTest(version.data, version.title, job.extracted, job.description),
+    master ? atsTest(master.data, version.title, job.extracted, job.description) : null,
+  ]);
+  const atsReport: AtsReport = { ...report, beforeScore: masterReport?.score ?? null };
+  await db.update(cvVersions).set({ atsReport }).where(eq(cvVersions.id, version.id));
+  return atsReport;
+}
+
 /** Save user edits to a tailored CV and re-score it. */
 export async function updateCvVersion(userId: string, id: string, data: Cv): Promise<void> {
   const version = await getCvVersion(userId, id);
@@ -117,7 +143,13 @@ export async function updateCvVersion(userId: string, id: string, data: Cv): Pro
     const job = await getJob(userId, version.jobId);
     if (job?.extracted) {
       const after = atsScore(data, job.extracted);
-      scores = { atsAfter: after.score, matchedKeywords: after.matched, missingKeywords: after.missing };
+      const report = await atsTest(data, version.title, job.extracted, job.description);
+      scores = {
+        atsAfter: after.score,
+        matchedKeywords: after.matched,
+        missingKeywords: after.missing,
+        atsReport: { ...report, beforeScore: version.atsReport?.beforeScore ?? null },
+      };
     }
   }
   await db

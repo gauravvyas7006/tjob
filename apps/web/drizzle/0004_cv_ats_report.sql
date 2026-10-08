@@ -1,0 +1,1 @@
+ALTER TABLE "cv_versions" ADD COLUMN "ats_report" jsonb;
