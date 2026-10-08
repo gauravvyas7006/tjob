@@ -1,0 +1,1 @@
+ALTER TABLE "cv_versions" ADD COLUMN "focus_note" text DEFAULT '' NOT NULL;

@@ -7,7 +7,7 @@ import { cvVersions, db, masterCv } from "@/db";
 import { aiErrorMessage } from "@/lib/ai/client";
 import { parseCvPdf } from "@/lib/ai/parse-cv";
 import { CvError, getCvVersion, getMasterCv, tailorForJob, updateCvVersion } from "@/lib/cv/service";
-import { upsertJob } from "@/lib/jobs";
+import { pastedJobInput, upsertJob } from "@/lib/jobs";
 import { requireUser } from "@/lib/session";
 
 export type ActionState = { ok: boolean; message?: string } | undefined;
@@ -85,22 +85,7 @@ export async function tailorFromJdAction(_prev: ActionState, form: FormData): Pr
   const note = String(form.get("note") ?? "").trim();
   if (description.length < 100) return { ok: false, message: "Paste the full job description." };
 
-  const source = /linkedin\.com/.test(url) ? "linkedin" : /naukri\.com/.test(url) ? "naukri" : "other";
-  const externalId =
-    source === "linkedin"
-      ? (url.match(/jobs\/view\/(\d{6,})/)?.[1] ?? null)
-      : source === "naukri"
-        ? (url.match(/-(\d{9,})(?:\?|$)/)?.[1] ?? null)
-        : null;
-  const job = await upsertJob(user.id, {
-    source,
-    externalId,
-    url,
-    title,
-    company,
-    description,
-    capturedVia: "manual",
-  });
+  const job = await upsertJob(user.id, pastedJobInput({ description, url, title, company }));
   let versionId: string;
   try {
     versionId = (await tailorForJob(user.id, job.id, { focusNote: note })).id;

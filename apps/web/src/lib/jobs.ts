@@ -27,6 +27,31 @@ export interface JobInput {
   capturedVia: CaptureMethod;
 }
 
+/**
+ * A job description pasted by hand. A LinkedIn or Naukri link (given, or found in the text) ties it
+ * to that site's job id, so the same job saved from the extension isn't duplicated.
+ */
+export function pastedJobInput(p: { description: string; url?: string; title?: string; company?: string }): JobInput {
+  const description = p.description.trim();
+  const url = p.url?.trim() || description.match(/https?:\/\/[^\s<>"')]+/)?.[0] || "";
+  const source: JobSource = /linkedin\.com/.test(url) ? "linkedin" : /naukri\.com/.test(url) ? "naukri" : "other";
+  const externalId =
+    source === "linkedin"
+      ? (url.match(/jobs\/view\/(?:[^/?]*-)?(\d{6,})/)?.[1] ?? null)
+      : source === "naukri"
+        ? (url.match(/-(\d{9,})(?:\?|$)/)?.[1] ?? null)
+        : null;
+  return {
+    source,
+    externalId,
+    url,
+    title: p.title?.trim() ?? "",
+    company: p.company?.trim() ?? "",
+    description,
+    capturedVia: "manual",
+  };
+}
+
 function descriptionHash(description: string): string | null {
   const norm = description.toLowerCase().replace(/\s+/g, " ").trim();
   return norm.length >= 80 ? sha256(norm) : null;

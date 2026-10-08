@@ -232,6 +232,8 @@ export const cvVersions = pgTable(
     matchedKeywords: jsonb("matched_keywords").$type<string[]>().notNull().default([]),
     missingKeywords: jsonb("missing_keywords").$type<string[]>().notNull().default([]),
     model: text("model").notNull().default(""),
+    /** What the user asked for when re-tailoring ("lead with my Node.js work"), shown in the Tailor chat. */
+    focusNote: text("focus_note").notNull().default(""),
     ...timestamps,
   },
   (t) => [index("cv_versions_user_created").on(t.userId, t.createdAt)],

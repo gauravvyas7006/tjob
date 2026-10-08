@@ -1,7 +1,7 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq, max } from "drizzle-orm";
 import { applyTailorPatch, type Cv } from "@tjob/shared";
-import { applications, cvVersions, db, masterCv } from "@/db";
+import { applications, cvVersions, db, jobs, masterCv } from "@/db";
 import { tailorCv } from "@/lib/ai/tailor-cv";
 import { applicationForJob, changeStatus, addEvent } from "@/lib/applications";
 import { ensureJobExtracted, getJob } from "@/lib/jobs";
@@ -70,6 +70,7 @@ export async function tailorForJob(
       matchedKeywords: after.matched,
       missingKeywords: after.missing,
       model: "claude-sonnet-5-5",
+      focusNote: opts.focusNote?.trim().slice(0, 500) ?? "",
     })
     .returning();
 
@@ -79,6 +80,31 @@ export async function tailorForJob(
   if (app.status === "saved") await changeStatus(app, "cv_ready", { auto: true });
 
   return version;
+}
+
+/** Jobs the user has tailored a CV for, most recent first: the Tailor chat's conversation list. */
+export async function tailorThreads(userId: string) {
+  const lastAt = max(cvVersions.createdAt);
+  return db
+    .select({ jobId: jobs.id, title: jobs.title, company: jobs.company, lastAt, versions: count(cvVersions.id) })
+    .from(cvVersions)
+    .innerJoin(jobs, eq(jobs.id, cvVersions.jobId))
+    .where(eq(cvVersions.userId, userId))
+    .groupBy(jobs.id)
+    .orderBy(desc(lastAt))
+    .limit(30);
+}
+
+/** One job's conversation: its description and every CV version tailored for it, oldest first. */
+export async function tailorThread(userId: string, jobId: string) {
+  const job = await getJob(userId, jobId);
+  if (!job) return null;
+  const versions = await db
+    .select()
+    .from(cvVersions)
+    .where(and(eq(cvVersions.userId, userId), eq(cvVersions.jobId, jobId)))
+    .orderBy(asc(cvVersions.createdAt));
+  return { job, versions };
 }
 
 /** Save user edits to a tailored CV and re-score it. */

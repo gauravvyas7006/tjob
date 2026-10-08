@@ -42,9 +42,9 @@ vi.mock("@/lib/ai/tailor-cv", () => ({
 const { db, user, applications, emails, jobSkills, applicationEvents, masterCv, profile, savedAnswers, aiUsage, agencies } =
   await import("@/db");
 const { processIncomingMail } = await import("./mail/process");
-const { upsertJob, ensureJobExtracted } = await import("./jobs");
+const { upsertJob, ensureJobExtracted, pastedJobInput } = await import("./jobs");
 const { applicationForJob, changeStatus, markGhosted } = await import("./applications");
-const { tailorForJob } = await import("./cv/service");
+const { tailorForJob, tailorThread, tailorThreads } = await import("./cv/service");
 const { importApplications } = await import("./import/applications");
 const { autofillAnswers, saveAnswers } = await import("./autofill");
 const { assertAiAvailable, recordUsage, budgetStatus, AiUnavailableError } = await import("./ai/budget");
@@ -403,6 +403,36 @@ describe("agencies", () => {
     // Another user's agency is never touched.
     await setAgencyStatus("someone-else", own.id, "contacted");
     expect(await contactedAt()).toBeNull();
+  });
+});
+
+describe("tailor chat", () => {
+  it("turns a pasted job description into a conversation of CV versions", async () => {
+    await db.insert(masterCv).values({ userId: USER, data: masterFixture() }).onConflictDoNothing();
+    const pasted = [
+      "Senior Java Developer, Acme. Apply: https://www.linkedin.com/jobs/view/java-developer-at-acme-4012345678/?ref=x",
+      "Spring Boot microservices and Kafka. ".repeat(10),
+    ].join("\n");
+    const input = pastedJobInput({ description: pasted });
+    expect(input).toMatchObject({ source: "linkedin", externalId: "4012345678", capturedVia: "manual" });
+    expect(pastedJobInput({ description: "x", url: "https://www.naukri.com/job-listings-java-dev-acme-pune-3-to-6-years-081025912345" }))
+      .toMatchObject({ source: "naukri", externalId: "081025912345" });
+    expect(pastedJobInput({ description: "No link here" })).toMatchObject({ source: "other", externalId: null, url: "" });
+
+    const job = await upsertJob(USER, input);
+    const first = await tailorForJob(USER, job.id);
+    const second = await tailorForJob(USER, job.id, { focusNote: "  lead with the microservices work  " });
+    expect(second.focusNote).toBe("lead with the microservices work");
+
+    const thread = await tailorThread(USER, job.id);
+    expect(thread?.versions.map((v) => [v.id, v.focusNote])).toEqual([
+      [first.id, ""],
+      [second.id, "lead with the microservices work"],
+    ]);
+    // Pasting the same description again continues the same conversation.
+    expect((await upsertJob(USER, pastedJobInput({ description: pasted }))).id).toBe(job.id);
+    expect((await tailorThreads(USER))[0]).toMatchObject({ jobId: job.id, versions: 2, title: "Java Developer" });
+    expect(await tailorThread("someone-else", job.id)).toBeNull();
   });
 });
 

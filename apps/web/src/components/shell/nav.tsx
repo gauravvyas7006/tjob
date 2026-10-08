@@ -11,6 +11,7 @@ import {
   Inbox,
   LayoutDashboard,
   Settings,
+  WandSparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ const ITEMS = [
   { href: "/agencies", label: "Agencies", icon: Building2 },
   { href: "/events", label: "Events", icon: CalendarDays },
   { href: "/cv", label: "CV", icon: FileText },
+  { href: "/tailor", label: "Tailor CV", icon: WandSparkles },
   { href: "/copy", label: "Quick copy", icon: ClipboardCopy },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/insights", label: "Insights", icon: BarChart3 },

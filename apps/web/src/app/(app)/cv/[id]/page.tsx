@@ -7,8 +7,9 @@ import { getCvVersion, getMasterCv } from "@/lib/cv/service";
 import { getJob } from "@/lib/jobs";
 import { requireUser } from "@/lib/session";
 import { formatDate } from "@/lib/format";
+import { AddFact } from "@/components/add-fact";
 import { Button } from "@/components/ui/button";
-import { AddFact, DeleteVersion, Retailor, VersionEditor } from "./client";
+import { DeleteVersion, Retailor, VersionEditor } from "./client";
 
 export const maxDuration = 120;
 
