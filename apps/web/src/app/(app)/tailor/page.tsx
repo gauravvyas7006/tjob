@@ -31,9 +31,14 @@ function Intro() {
           to fix.
         </li>
       </ul>
+      <p className="mt-2">
+        ATS fixes happen automatically: your headline leads with the job&apos;s title, skills use the job&apos;s own words,
+        and the CV is cut to 2 pages.
+      </p>
       <p className="mt-2 text-muted-foreground">
-        I only reword what&apos;s in your CV and Extra facts. Anything the job wants that your CV doesn&apos;t show is
-        listed as a gap, never added. Each CV costs about $0.03.
+        I only reword what&apos;s in your CV and Extra facts; past job titles and experience stay as they are. Skills the
+        job wants that you don&apos;t have are listed as gaps, or under &ldquo;Currently learning&rdquo; if you tick that
+        box below. Each CV costs about $0.03.
       </p>
     </Bubble>
   );
@@ -137,9 +142,7 @@ function Reply({ v, latest }: { v: CvVersion; latest: boolean }) {
               <li key={i}>
                 <div className="font-medium">{g.requirement}</div>
                 <div className="text-muted-foreground">{g.note}</div>
-                {latest && (
-                  <GapHelper versionId={v.id} requirement={g.requirement} note={g.note} jobId={v.jobId ?? undefined} />
-                )}
+                {latest && <GapHelper versionId={v.id} requirement={g.requirement} note={g.note} />}
               </li>
             ))}
           </ul>
@@ -261,6 +264,14 @@ export default async function TailorPage(props: PageProps<"/tailor">) {
                   <Reply v={v} latest={i === versions.length - 1} />
                 </div>
               ))}
+              {latest && master.updatedAt > latest.createdAt && (
+                <Bubble from="tjob">
+                  <p>
+                    You&apos;ve changed your CV or Extra facts since this version. Press <strong>Tailor again</strong> below
+                    to use the new details.
+                  </p>
+                </Bubble>
+              )}
             </>
           ) : (
             <Intro />

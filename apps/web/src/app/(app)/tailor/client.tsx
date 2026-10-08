@@ -1,14 +1,30 @@
 "use client";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, SendHorizontal } from "lucide-react";
+import { Loader2, RefreshCw, SendHorizontal } from "lucide-react";
 import { MAX_TAILOR_REQUEST } from "@/lib/cv/chat";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { refineTailorChatAction, startTailorChatAction } from "./actions";
 import { Bubble } from "./bubble";
 
 type Sent = { text: string; kind: "job" | "request" };
+
+const LEARNING_KEY = "tjob.tailor.learning";
+
+function readLearning(): boolean {
+  try {
+    return localStorage.getItem(LEARNING_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function subscribeStorage(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
 
 /**
  * The conversation's live parts: the message box, the message being worked on, and errors.
@@ -32,12 +48,39 @@ export function TailorChat({
   const [text, setText] = useState("");
   const [sent, setSent] = useState<Sent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A per-browser preference; without storage the checkbox still works for this visit.
+  const stored = useSyncExternalStore(subscribeStorage, readLearning, () => false);
+  const [override, setOverride] = useState<boolean | null>(null);
+  const learning = override ?? stored;
   const [pending, start] = useTransition();
   const endRef = useRef<HTMLDivElement>(null);
+
+  const toggleLearning = (on: boolean) => {
+    setOverride(on);
+    try {
+      localStorage.setItem(LEARNING_KEY, on ? "1" : "0");
+    } catch {}
+  };
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [versionCount, sent, error]);
+
+  const run = (message: Sent, call: () => Promise<Awaited<ReturnType<typeof startTailorChatAction>>>, restore = "") => {
+    setError(null);
+    setSent(message);
+    start(async () => {
+      const res = await call();
+      if (!res.ok) {
+        setError(res.message);
+        setText(restore);
+        setSent(null);
+        return;
+      }
+      if (res.jobId !== jobId) router.push(`/tailor?job=${res.jobId}`);
+      else setSent(null);
+    });
+  };
 
   const send = () => {
     const value = text.trim();
@@ -47,20 +90,17 @@ export function TailorChat({
       setError("That looks too short for a job description. Paste the whole description.");
       return;
     }
-    setError(null);
-    setSent({ text: value, kind });
     setText("");
-    start(async () => {
-      const res = kind === "job" ? await startTailorChatAction(value) : await refineTailorChatAction(jobId!, value);
-      if (!res.ok) {
-        setError(res.message);
-        setText(value);
-        setSent(null);
-        return;
-      }
-      if (res.jobId !== jobId) router.push(`/tailor?job=${res.jobId}`);
-      else setSent(null);
-    });
+    run(
+      { text: value, kind },
+      () => (kind === "job" ? startTailorChatAction(value, learning) : refineTailorChatAction(jobId!, value, learning)),
+      value,
+    );
+  };
+
+  const tailorAgain = () => {
+    if (!jobId || pending) return;
+    run({ text: "Tailor again", kind: "request" }, () => refineTailorChatAction(jobId, "", learning));
   };
 
   return (
@@ -80,8 +120,8 @@ export function TailorChat({
               <p className="flex items-center gap-2 text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" aria-hidden />
                 {sent.kind === "job"
-                  ? "Reading the job description and rewriting your CV. This takes 20–40 seconds."
-                  : "Rewriting your CV with that change. This takes 20–40 seconds."}
+                  ? "Reading the job description, rewriting your CV and testing it. This takes 20–40 seconds."
+                  : "Rewriting your CV and testing it again. This takes 20–40 seconds."}
               </p>
             </Bubble>
           </>
@@ -129,6 +169,18 @@ export function TailorChat({
               <Button type="submit" size="icon" disabled={pending || !text.trim()} aria-label="Send">
                 <SendHorizontal className="size-4" aria-hidden />
               </Button>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <label className="flex items-center gap-2 text-xs">
+                <Checkbox checked={learning} onCheckedChange={(v) => toggleLearning(v === true)} />
+                List skills the job needs that I don&apos;t have yet as &ldquo;Currently learning&rdquo;
+              </label>
+              {jobId && (
+                <Button type="button" size="sm" variant="outline" disabled={pending} onClick={tailorAgain}>
+                  <RefreshCw className={pending ? "size-3.5 animate-spin" : "size-3.5"} aria-hidden />
+                  Tailor again
+                </Button>
+              )}
             </div>
             <p className="mt-1.5 text-xs text-muted-foreground">Ctrl+Enter to send · {footnote}</p>
           </>

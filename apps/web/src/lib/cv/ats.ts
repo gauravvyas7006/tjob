@@ -7,6 +7,7 @@ import {
   type JdExtraction,
   type KeywordScore,
 } from "@tjob/shared";
+import { LEARNING_CATEGORY } from "./ats-check";
 
 export function atsScore(cv: Cv, jd: JdExtraction): KeywordScore {
   return keywordCoverage(cvToPlainText(cv), jd.requiredSkills, [...jd.niceToHaveSkills, ...jd.keywords]);
@@ -18,8 +19,10 @@ export function atsScore(cv: Cv, jd: JdExtraction): KeywordScore {
  */
 export function unsupportedSkills(master: Cv, extraFacts: string, tailored: Cv): string[] {
   const facts = cvToPlainText(master) + "\n" + extraFacts;
-  const fromText = extractSkills(cvToPlainText(tailored));
-  const fromSkillList = tailored.skills.flatMap((g) => g.items);
+  // Skills listed as "Currently learning" are labelled as such, so they aren't claims of experience.
+  const claimed = { ...tailored, skills: tailored.skills.filter((g) => g.category !== LEARNING_CATEGORY) };
+  const fromText = extractSkills(cvToPlainText(claimed));
+  const fromSkillList = claimed.skills.flatMap((g) => g.items);
   const candidates = [...new Set([...fromText, ...fromSkillList])];
   return candidates.filter((s) => !textHasSkill(facts, s));
 }

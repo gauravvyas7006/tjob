@@ -11,14 +11,20 @@ TRUTHFULNESS (most important):
 - Mention a technology only if it appears in MASTER_CV or EXTRA_FACTS. Keep every existing number exactly as written; never create new numbers.
 - If the JD asks for something the candidate doesn't show, do NOT add it. List it under gaps instead.
 
+ATS MATCH (the goal is to get through automated screening and recruiter keyword searches):
+- EXTRA_FACTS are true details the candidate added, often for this job's gaps: work each relevant one into the matching role or project bullets and into skills.
+- Use the JD's exact words for things the candidate has. When the CV shows a specific instance of a JD's general term, name both, e.g. "RDBMS (MySQL, PostgreSQL)", "CI/CD (GitHub Actions)", "unit testing (Jest)", "containerisation (Docker)".
+- Put the JD's most important matching keywords in the summary, the first skills group and the first bullets of the most recent role.
+- The CV must fit on 2 pages: at most 6 bullets for the most recent role, 4 for the next, 3 for older roles, and at most 3 projects with 2 bullets each.
+
 WHAT TO RETURN (only the parts that change; everything else is kept from the master CV):
-- headline: a target title aligned with the JD that is still truthful (e.g. "Backend Engineer | Java, Spring Boot, Microservices").
+- headline: the JD's job title, then " | " and 3-5 of the candidate's real skills that the JD asks for (e.g. "Backend Developer | Node.js, REST APIs, PostgreSQL, CI/CD"). The headline names the role being applied for; never change the job titles in experience.
 - summary: 2-3 sentences, max 60 words, leading with the strengths this JD cares about. State years of experience only if derivable from the dates.
 - skills: up to 6 groups, JD-relevant groups and items first; only skills from MASTER_CV/EXTRA_FACTS; keep breadth, drop only clearly irrelevant items.
-- experience: one entry per experience id in MASTER_CV (same ids). 3-6 bullets each (up to 7 for the most recent role). Most JD-relevant bullets first. Start with a strong action verb, max 30 words, past tense for past roles, include JD keywords naturally where truthful, show impact where the master CV has it.
-- projectOrder: ids of projects to include, most relevant first (drop clearly irrelevant ones only if there are more than 4). projects: rewritten bullets for those projects (same rules as experience).
-- changes: 3-8 short notes on what you changed and why (for the candidate to review).
-- gaps: each important JD requirement the CV doesn't support, with a one-line note on how the candidate could address it honestly (e.g. "If you used Kafka on MARS, add it to Extra facts and re-tailor").
+- experience: one entry per experience id in MASTER_CV (same ids), within the bullet limits above. Most JD-relevant bullets first. Start with a strong action verb, max 30 words, past tense for past roles, include JD keywords naturally where truthful, show impact where the master CV has it.
+- projectOrder: ids of the most relevant projects (up to 3), most relevant first. projects: rewritten bullets for those projects (same rules as experience).
+- changes: 3-8 short notes on what you changed and why (for the candidate to review). Refer to roles by company name, never by id.
+- gaps: each important JD requirement the CV and EXTRA_FACTS don't support, with a one-line note on how the candidate could address it honestly (e.g. "If you used Kafka at MARS, add it to Extra facts and re-tailor").
 
 Plain text only: no markdown, no emojis, no first-person pronouns in bullets.`;
 

@@ -11,6 +11,12 @@ export async function readPdf(pdf: Uint8Array): Promise<{ text: string; pages: n
   return { text, pages: totalPages };
 }
 
+/** How many pages the downloaded PDF has. */
+export async function pageCount(cv: Cv, title: string): Promise<number> {
+  const doc = await getDocumentProxy(new Uint8Array(await renderCvPdf(cv, title)));
+  return doc.numPages;
+}
+
 /** Renders the CV exactly as it downloads, reads the file back, and checks it against the job. */
 export async function atsTest(
   cv: Cv,

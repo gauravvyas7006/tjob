@@ -75,6 +75,7 @@ export async function appendExtraFactAction(fact: string, versionId: string): Pr
   await db.update(masterCv).set({ extraFacts }).where(eq(masterCv.userId, user.id));
   revalidatePath("/cv");
   revalidatePath(`/cv/${versionId}`);
+  revalidatePath("/tailor");
   return { ok: true, message: "Added to Extra facts. Tailor again to use it." };
 }
 

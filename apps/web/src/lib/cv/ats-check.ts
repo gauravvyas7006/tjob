@@ -1,4 +1,11 @@
-import { dedupeSkills, keywordCoverage, type Cv, type JdExtraction } from "@tjob/shared";
+import {
+  cvToPlainText,
+  dedupeSkills,
+  keywordCoverage,
+  textHasRequirement,
+  type Cv,
+  type JdExtraction,
+} from "@tjob/shared";
 
 /*
  * ATS test: what applicant tracking systems commonly check, applied to the text read back out of
@@ -110,6 +117,24 @@ function titleWords(s: string): string[] {
     .filter((w) => w.length > 1 && !TITLE_NOISE.has(w));
 }
 
+/** Share (0–1) of the job title's words found in the CV's headline or job titles; null if the title has none. */
+export function titleCoverage(cv: Cv, jobTitle: string): number | null {
+  const wanted = titleWords(jobTitle);
+  if (!wanted.length) return null;
+  const yours = new Set(titleWords([cv.headline, ...cv.experience.map((e) => e.role)].join(" ")));
+  return wanted.filter((w) => yours.has(w)).length / wanted.length;
+}
+
+/**
+ * Skills group for job requirements the candidate is studying but hasn't used at work. ATS keyword
+ * matching counts them; the heading tells a recruiter the truth.
+ */
+export const LEARNING_CATEGORY = "Currently learning";
+
+export function learningSkills(cv: Cv): string[] {
+  return cv.skills.filter((g) => g.category === LEARNING_CATEGORY).flatMap((g) => g.items);
+}
+
 const list = (items: string[], max = 6) =>
   items.length > max ? `${items.slice(0, max).join(", ")} and ${items.length - max} more` : items.join(", ");
 
@@ -200,13 +225,19 @@ export function atsCheck({ cv, jd, description, pdfText, pages, now = new Date()
   const optional = dedupeSkills([...jd.niceToHaveSkills, ...jd.keywords]).filter((s) => !required.includes(s));
   if (required.length) {
     const r = keywordCoverage(text, required);
+    const learning = learningSkills(cv).join(", ");
+    const work = cvToPlainText({ ...cv, skills: cv.skills.filter((g) => g.category !== LEARNING_CATEGORY) });
+    const fromLearning = learning ? r.matched.filter((s) => textHasRequirement(learning, s) && !textHasRequirement(work, s)) : [];
     add({
       id: "required",
       group: "match",
       label: "Required skills",
       status: r.score >= 75 ? "pass" : r.score >= 50 ? "warn" : "fail",
-      detail: `${r.matched.length} of ${required.length} found${r.missing.length ? `. Missing: ${list(r.missing)}` : ""}.`,
-      fix: "Recruiters filter on these. Add any you really have (Extra facts, then tailor again); otherwise this job may not be a good fit.",
+      detail:
+        `${r.matched.length} of ${required.length} found` +
+        (fromLearning.length ? ` (${fromLearning.length} under ${LEARNING_CATEGORY}: expect interview questions on them)` : "") +
+        `${r.missing.length ? `. Missing: ${list(r.missing)}` : ""}.`,
+      fix: "Recruiters filter on these. Add any you really have to Extra facts, or tick “Currently learning” to list the ones you are studying, then press Tailor again.",
       weight: 35,
       points: r.score / 100,
     });
@@ -225,18 +256,15 @@ export function atsCheck({ cv, jd, description, pdfText, pages, now = new Date()
     });
   }
 
-  const wanted = titleWords(jd.title);
-  if (wanted.length) {
-    const yours = new Set(titleWords([cv.headline, ...cv.experience.map((e) => e.role)].join(" ")));
-    const found = wanted.filter((w) => yours.has(w));
-    const share = found.length / wanted.length;
+  const share = titleCoverage(cv, jd.title);
+  if (share !== null) {
     add({
       id: "title",
       group: "match",
       label: "Job title",
       status: share >= 0.6 ? "pass" : share >= 0.3 ? "warn" : "fail",
       detail: share >= 0.6 ? `Your headline or roles match "${jd.title}".` : `"${jd.title}" isn't in your headline or job titles.`,
-      fix: "Recruiters search by title. If it fairly describes your work, use it in your headline.",
+      fix: "Recruiters search by title. Press Tailor again: tjob now starts your headline with the job's title.",
       weight: 10,
     });
   }

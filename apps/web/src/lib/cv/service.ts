@@ -6,7 +6,8 @@ import { tailorCv } from "@/lib/ai/tailor-cv";
 import { applicationForJob, changeStatus, addEvent } from "@/lib/applications";
 import { ensureJobExtracted, getJob } from "@/lib/jobs";
 import { atsScore, unsupportedSkills } from "./ats";
-import type { AtsReport } from "./ats-check";
+import { learningSkills, type AtsReport } from "./ats-check";
+import { atsAutoFix } from "./ats-fix";
 import { atsTest } from "./ats-test";
 
 export type CvVersion = typeof cvVersions.$inferSelect;
@@ -30,12 +31,16 @@ export async function getCvVersion(userId: string, id: string): Promise<CvVersio
 
 /**
  * Full tailoring flow for one job: extract requirements (once), rewrite the CV with Sonnet,
- * merge onto the master CV, score it, save a version and link it to the job's application.
+ * merge onto the master CV, apply the automatic ATS fixes, test the PDF, save a version and link
+ * it to the job's application.
+ *
+ * `learning` lists the job's missing skills under "Currently learning"; when not given, it follows
+ * the job's previous version, so a follow-up keeps the user's choice.
  */
 export async function tailorForJob(
   userId: string,
   jobId: string,
-  opts: { focusNote?: string; captureMethod?: "extension" | "manual" } = {},
+  opts: { focusNote?: string; captureMethod?: "extension" | "manual"; learning?: boolean } = {},
 ): Promise<CvVersion> {
   const master = await getMasterCv(userId);
   if (!master) throw new CvError("Upload your CV on the CV page first.");
@@ -46,6 +51,17 @@ export async function tailorForJob(
   const jd = await ensureJobExtracted(userId, job, { requireAi: true });
   if (!jd) throw new CvError("Couldn't read the job description.");
 
+  let learning = opts.learning;
+  if (learning === undefined) {
+    const [previous] = await db
+      .select({ data: cvVersions.data })
+      .from(cvVersions)
+      .where(and(eq(cvVersions.userId, userId), eq(cvVersions.jobId, job.id)))
+      .orderBy(desc(cvVersions.createdAt))
+      .limit(1);
+    learning = previous ? learningSkills(previous.data).length > 0 : false;
+  }
+
   const patch = await tailorCv(userId, {
     master: master.data,
     extraFacts: master.extraFacts,
@@ -53,10 +69,11 @@ export async function tailorForJob(
     description: job.description,
     focusNote: opts.focusNote,
   });
-  const tailored = applyTailorPatch(master.data, patch);
+  const title = [jd.title || job.title, job.company || jd.company].filter(Boolean).join(" · ") || "Tailored CV";
+  const fixed = await atsAutoFix(applyTailorPatch(master.data, patch), jd, title, { learning });
+  const tailored = fixed.cv;
   const before = atsScore(master.data, jd);
   const after = atsScore(tailored, jd);
-  const title = [jd.title || job.title, job.company || jd.company].filter(Boolean).join(" · ") || "Tailored CV";
   const [report, masterReport] = await Promise.all([
     atsTest(tailored, title, jd, job.description),
     atsTest(master.data, title, jd, job.description),
@@ -69,7 +86,7 @@ export async function tailorForJob(
       jobId: job.id,
       title,
       data: tailored,
-      changes: patch.changes,
+      changes: [...patch.changes, ...fixed.notes],
       gaps: patch.gaps,
       unsupported: unsupportedSkills(master.data, master.extraFacts, tailored),
       atsBefore: before.score,

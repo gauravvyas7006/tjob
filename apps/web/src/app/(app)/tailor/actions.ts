@@ -14,7 +14,7 @@ function failure(err: unknown): ChatResult {
 }
 
 /** A pasted job description: save the job and tailor the CV. The client then opens its conversation. */
-export async function startTailorChatAction(text: string): Promise<ChatResult> {
+export async function startTailorChatAction(text: string, learning = false): Promise<ChatResult> {
   const user = await requireUser();
   const description = text.trim();
   if (description.length < 100) {
@@ -23,7 +23,7 @@ export async function startTailorChatAction(text: string): Promise<ChatResult> {
   if (description.length > 30_000) return { ok: false, message: "That's longer than any job description. Paste just the one job." };
   const job = await upsertJob(user.id, pastedJobInput({ description }));
   try {
-    await tailorForJob(user.id, job.id);
+    await tailorForJob(user.id, job.id, { learning: learning === true });
   } catch (err) {
     return failure(err);
   }
@@ -32,16 +32,22 @@ export async function startTailorChatAction(text: string): Promise<ChatResult> {
   return { ok: true, jobId: job.id };
 }
 
-/** A follow-up in a conversation ("lead with my Node.js work"): tailor again with that note. */
-export async function refineTailorChatAction(jobId: string, text: string): Promise<ChatResult> {
+/**
+ * A follow-up in a conversation ("lead with my Node.js work"): tailor again with that note. An
+ * empty note is "Tailor again", e.g. after adding Extra facts or changing the learning option.
+ */
+export async function refineTailorChatAction(jobId: string, text: string, learning?: boolean): Promise<ChatResult> {
   const user = await requireUser();
-  const note = text.trim();
-  if (!z.uuid().safeParse(jobId).success || !note) return { ok: false, message: "Nothing to send." };
+  const note = String(text ?? "").trim();
+  if (!z.uuid().safeParse(jobId).success) return { ok: false, message: "This conversation wasn't found." };
   if (note.length > MAX_TAILOR_REQUEST) {
     return { ok: false, message: `Keep requests under ${MAX_TAILOR_REQUEST} characters.` };
   }
   try {
-    await tailorForJob(user.id, jobId, { focusNote: note });
+    await tailorForJob(user.id, jobId, {
+      focusNote: note,
+      learning: typeof learning === "boolean" ? learning : undefined,
+    });
   } catch (err) {
     return failure(err);
   }

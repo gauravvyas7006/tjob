@@ -3,28 +3,25 @@ import { useState, useTransition } from "react";
 import { Loader2, PencilLine, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { appendExtraFactAction, polishFactAction, suggestFactAction } from "@/app/(app)/cv/actions";
-import { refineTailorChatAction } from "@/app/(app)/tailor/actions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
-type Busy = "suggest" | "polish" | "add" | "retailor" | null;
+type Busy = "suggest" | "polish" | "add" | null;
 type Hint = { related: boolean; condition: string; basedOn: string };
 
 /**
  * Two ways to close a gap honestly, both ending in a sentence the user confirms before it's saved
  * to Extra facts: AI suggests where it fits in their real projects, or they write a rough note and
- * AI fixes the wording. With `jobId` (the Tailor chat) it can tailor again straight away.
+ * AI fixes the wording.
  */
 export function GapHelper({
   versionId,
   requirement,
   note,
-  jobId,
 }: {
   versionId: string;
   requirement: string;
   note: string;
-  jobId?: string;
 }) {
   const [mode, setMode] = useState<"suggest" | "write" | null>(null);
   const [text, setText] = useState("");
@@ -84,33 +81,7 @@ export function GapHelper({
       setAdded(true);
     });
 
-  const retailor = () =>
-    run("retailor", async () => {
-      const res = await refineTailorChatAction(jobId!, `Use my new Extra facts about ${requirement}.`);
-      if (!res.ok) toast.error(res.message);
-    });
-
-  if (added) {
-    return (
-      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-muted-foreground">Added to Extra facts.</span>
-        {jobId ? (
-          <Button size="sm" variant="outline" disabled={busy !== null} onClick={retailor}>
-            {busy === "retailor" ? (
-              <>
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                Tailoring… (20–40 s)
-              </>
-            ) : (
-              "Tailor again with this"
-            )}
-          </Button>
-        ) : (
-          <span className="text-muted-foreground">Tailor again to use it.</span>
-        )}
-      </div>
-    );
-  }
+  if (added) return <p className="mt-1.5 text-sm text-muted-foreground">Added to Extra facts.</p>;
 
   if (!mode) {
     return (

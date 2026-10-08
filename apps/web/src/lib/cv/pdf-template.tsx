@@ -70,7 +70,10 @@ function Bullets({ items }: { items: string[] }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
-      <Text style={styles.heading}>{title}</Text>
+      {/* Never leave a heading alone at the bottom of a page. */}
+      <Text style={styles.heading} minPresenceAhead={60}>
+        {title}
+      </Text>
       {children}
     </View>
   );
@@ -82,7 +85,9 @@ function dateRange(start: string, end: string) {
 
 export function CvDocument({ cv, title }: { cv: Cv; title: string }) {
   const c = cv.contact;
-  const contactParts = [c.email, c.phone, c.location].filter(Boolean).map(pdfSafe);
+  const contactParts = [c.email, c.phone, c.location].map((s) => s.trim()).filter(Boolean).map(pdfSafe);
+  // Links without an address (e.g. "LinkedIn" with no URL yet) would print as empty separators.
+  const links = c.links.filter((l) => l.url.trim());
 
   return (
     <Document title={pdfSafe(`${c.name} – ${title}`)} author={pdfSafe(c.name)} creator="tjob" producer="tjob">
@@ -91,7 +96,7 @@ export function CvDocument({ cv, title }: { cv: Cv; title: string }) {
         {cv.headline ? <Text style={styles.headline}>{pdfSafe(cv.headline)}</Text> : null}
         <Text style={styles.contact}>
           {contactParts.join("  |  ")}
-          {c.links.map((l, i) => (
+          {links.map((l, i) => (
             <Text key={i}>
               {contactParts.length || i > 0 ? "  |  " : ""}
               <Link src={l.url} style={styles.link}>
@@ -124,7 +129,8 @@ export function CvDocument({ cv, title }: { cv: Cv; title: string }) {
           <Section title="Experience">
             {cv.experience.map((e) => (
               <View key={e.id} style={styles.entry}>
-                <View style={styles.entryHead}>
+                {/* Keep each job's title with its first bullets. */}
+                <View style={styles.entryHead} minPresenceAhead={50} wrap={false}>
                   <Text style={styles.entryTitle}>
                     {pdfSafe([e.role, e.company].filter(Boolean).join(", "))}
                   </Text>
@@ -147,7 +153,9 @@ export function CvDocument({ cv, title }: { cv: Cv; title: string }) {
           <Section title="Projects">
             {cv.projects.map((p) => (
               <View key={p.id} style={styles.entry}>
-                <Text style={styles.entryTitle}>{pdfSafe(p.name)}</Text>
+                <Text style={styles.entryTitle} minPresenceAhead={40}>
+                  {pdfSafe(p.name)}
+                </Text>
                 {p.description ? <Text style={styles.sub}>{pdfSafe(p.description)}</Text> : null}
                 <Bullets items={p.bullets} />
                 {p.tech.length ? (

@@ -213,6 +213,11 @@ export function canonicalSkill(name: string): string {
   return ALIAS_TO_CANONICAL.get(key) ?? name.trim().replace(/\s+/g, " ");
 }
 
+/** Whether the name is a technology in tjob's skills dictionary (not a practice like "API development"). */
+export function isKnownSkill(name: string): boolean {
+  return ALIAS_TO_CANONICAL.has(name.trim().toLowerCase().replace(/\s+/g, " "));
+}
+
 export function skillCategory(canonical: string): SkillCategory | "other" {
   return CANONICAL_TO_CATEGORY.get(canonical) ?? "other";
 }
