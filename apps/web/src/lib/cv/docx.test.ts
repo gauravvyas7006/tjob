@@ -12,7 +12,7 @@ function sample(): Cv {
     location: "Bengaluru",
     links: [
       { label: "LinkedIn", url: "" },
-      { label: "GitHub", url: "https://github.com/test-candidate" },
+      { label: "GitHub", url: "https://github.com/test-candidate/" },
     ],
   };
   cv.headline = "Backend Developer | Node.js, PostgreSQL";
@@ -62,7 +62,10 @@ describe("CV Word file", () => {
     expect(paragraphs.some((p) => p.startsWith("•"))).toBe(false);
     // Contact line: no empty separators for links without an address.
     const contact = paragraphs.find((p) => p.includes("candidate@example.com"))!;
-    expect(contact).toContain("github.com/test-candidate");
-    expect(contact).not.toMatch(/\|\s*\|/);
+    expect(contact).toBe("candidate@example.com  |  +91 90000 00000  |  Bengaluru");
+    // Profile links on the next line, as named hyperlinks; empty links skipped.
+    expect(paragraphs[paragraphs.indexOf(contact) + 1]).toBe("GitHub");
+    const rels = await (await JSZip.loadAsync(buf)).file("word/_rels/document.xml.rels")!.async("string");
+    expect(rels).toContain('Target="https://github.com/test-candidate/"');
   });
 });

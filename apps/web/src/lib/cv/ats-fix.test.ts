@@ -197,10 +197,36 @@ describe("CV PDF layout", () => {
     for (const word of [/PostgreSQL/g, /Elasticsearch/g]) expect(text.match(word)?.length).toBe(source.match(word)?.length);
   }, 30000);
 
-  it("skips links without an address instead of printing empty separators", async () => {
-    const { text } = await readPdf(await renderCvPdf(cv(), "t"));
-    expect(text).toContain("github.com/test-candidate");
+  it("never leaves a job's title alone at the bottom of a page", async () => {
+    const c = cv();
+    // Jobs of different lengths, so page breaks land at many points in an entry.
+    c.experience = Array.from({ length: 14 }, (_, r) => ({
+      id: `exp-${r}`,
+      company: `Company${r}`,
+      role: "Software Developer",
+      location: `City${r}`,
+      startDate: `Jan ${2024 - r}`,
+      endDate: `Dec ${2024 - r}`,
+      bullets: Array.from({ length: 2 + (r % 4) }, (_, i) => `Built feature ${r}-${i} across the API and database, cutting errors for users by a measurable amount.`),
+      tech: [],
+    }));
+    const doc = await (await import("unpdf")).getDocumentProxy(new Uint8Array(await renderCvPdf(c, "t")));
+    const { text } = await (await import("unpdf")).extractText(doc, { mergePages: false });
+    expect(text.length).toBeGreaterThan(1);
+    for (const page of text.slice(0, -1)) {
+      const last = page.trim().split("\n").at(-1)!;
+      expect(last).not.toMatch(/^Software Developer, Company\d+|^City\d+$/);
+    }
+  }, 30000);
+
+  it("shows profile links as named, clickable links and skips ones without an address", async () => {
+    const pdf = await renderCvPdf(cv(), "t");
+    const { text } = await readPdf(pdf);
+    expect(text.split("\n")).toContain("GitHub");
     expect(text).not.toMatch(/\|\s*\|/);
     expect(text.trim()).not.toMatch(/\|\s*$/m);
+    const { getDocumentProxy } = await import("unpdf");
+    const annotations = await (await (await getDocumentProxy(new Uint8Array(pdf))).getPage(1)).getAnnotations();
+    expect(annotations.map((a: { url?: string }) => a.url)).toContain("https://github.com/test-candidate");
   }, 30000);
 });

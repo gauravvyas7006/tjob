@@ -12,6 +12,7 @@ import {
   TextRun,
 } from "docx";
 import type { Cv } from "@tjob/shared";
+import { linkText } from "./pdf-template";
 
 /*
  * The same CV as the PDF, as a Word file: some older ATS and many recruiters prefer .docx.
@@ -66,24 +67,33 @@ export async function renderCvDocx(cv: Cv, title: string): Promise<Buffer> {
   const c = cv.contact;
   const contact = [c.email, c.phone, c.location].map((s) => s.trim()).filter(Boolean);
   const links = c.links.filter((l) => l.url.trim());
+  // Centered header, like the PDF.
   const body: Paragraph[] = [
-    new Paragraph({ children: [run(c.name, { bold: true, size: 36 })], spacing: { after: 20 } }),
+    new Paragraph({ children: [run(c.name, { bold: true, size: 36 })], alignment: AlignmentType.CENTER, spacing: { after: 20 } }),
   ];
-  if (cv.headline) body.push(new Paragraph({ children: [run(cv.headline, { size: 23 })], spacing: { after: 20 } }));
-  body.push(
-    new Paragraph({
-      children: [
-        run(contact.join("  |  "), { size: 20, color: "333333" }),
-        ...links.flatMap((l, i) => [
-          run(contact.length || i > 0 ? "  |  " : "", { size: 20, color: "333333" }),
+  if (cv.headline) {
+    body.push(new Paragraph({ children: [run(cv.headline, { size: 23 })], alignment: AlignmentType.CENTER, spacing: { after: 20 } }));
+  }
+  if (contact.length) {
+    body.push(
+      new Paragraph({ alignment: AlignmentType.CENTER, children: [run(contact.join("  |  "), { size: 20, color: "333333" })] }),
+    );
+  }
+  // Profile links on their own line, like the PDF.
+  if (links.length) {
+    body.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: links.flatMap((l, i) => [
+          ...(i > 0 ? [run("  |  ", { size: 20, color: "333333" })] : []),
           new ExternalHyperlink({
             link: l.url,
-            children: [run(l.url.replace(/^https?:\/\/(www\.)?/, ""), { size: 20, color: "333333" })],
+            children: [new TextRun({ text: linkText(l), font: FONT, size: 20, color: "1D4ED8", underline: {} })],
           }),
         ]),
-      ],
-    }),
-  );
+      }),
+    );
+  }
 
   if (cv.summary) body.push(heading("Summary"), new Paragraph({ children: [run(cv.summary)] }));
 

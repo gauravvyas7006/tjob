@@ -23,38 +23,40 @@ export function pdfSafe(s: string): string {
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 34,
-    paddingBottom: 34,
-    paddingHorizontal: 40,
+    paddingTop: 36,
+    paddingBottom: 36,
+    paddingHorizontal: 44,
     fontFamily: "Helvetica",
     fontSize: 10,
-    lineHeight: 1.35,
-    color: "#111111",
+    lineHeight: 1.42,
+    color: "#1a1a1a",
   },
-  name: { fontSize: 18, fontFamily: "Helvetica-Bold", marginBottom: 2 },
-  headline: { fontSize: 11, marginBottom: 3 },
-  contact: { fontSize: 9.5, color: "#333333" },
-  link: { color: "#333333", textDecoration: "none" },
-  section: { marginTop: 10 },
+  // Centered header; alignment doesn't change the reading order an ATS sees. Explicit line
+  // heights so the large name never touches the headline.
+  name: { fontSize: 20, lineHeight: 1.2, fontFamily: "Helvetica-Bold", letterSpacing: 0.5, textAlign: "center", marginBottom: 5 },
+  headline: { fontSize: 11, lineHeight: 1.3, color: "#333333", textAlign: "center", marginBottom: 6 },
+  contact: { fontSize: 9.5, lineHeight: 1.5, color: "#444444", textAlign: "center" },
+  link: { color: "#1d4ed8", textDecoration: "underline" },
+  section: { marginTop: 14 },
   heading: {
     fontSize: 10.5,
     fontFamily: "Helvetica-Bold",
     textTransform: "uppercase",
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
     borderBottomWidth: 0.75,
-    borderBottomColor: "#999999",
-    paddingBottom: 2,
-    marginBottom: 5,
+    borderBottomColor: "#b0b0b0",
+    paddingBottom: 3,
+    marginBottom: 7,
   },
-  entry: { marginBottom: 6 },
+  entry: { marginBottom: 10 },
   entryHead: { flexDirection: "row", justifyContent: "space-between" },
   entryTitle: { fontFamily: "Helvetica-Bold", flexShrink: 1, paddingRight: 8 },
-  entryMeta: { color: "#333333", fontSize: 9.5 },
-  sub: { color: "#333333", fontSize: 9.5, marginBottom: 1 },
-  bulletRow: { flexDirection: "row", marginTop: 1.5 },
-  bulletDot: { width: 10 },
+  entryMeta: { color: "#444444", fontSize: 9.5 },
+  sub: { color: "#555555", fontSize: 9.5, marginBottom: 2 },
+  bulletRow: { flexDirection: "row", marginTop: 2.5 },
+  bulletDot: { width: 11 },
   bulletText: { flex: 1 },
-  skillRow: { marginBottom: 2 },
+  skillRow: { marginBottom: 3.5 },
   bold: { fontFamily: "Helvetica-Bold" },
 });
 
@@ -83,8 +85,23 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+// The first bullet goes in the same unbreakable block as its heading; the rest may flow on.
+const firstOf = (items: string[]) => items.filter(Boolean).slice(0, 1);
+const restOf = (items: string[]) => items.filter(Boolean).slice(1);
+
 function dateRange(start: string, end: string) {
   return [start, end].filter(Boolean).join(" – ");
+}
+
+/**
+ * A profile link as printed: its name ("LinkedIn", "GitHub"), with the URL behind it. Links
+ * without a name show the address without scheme, www or trailing slash.
+ */
+export function linkText(link: { label: string; url: string }): string {
+  const url = link.url.trim();
+  if (/linkedin\.com\//i.test(url)) return "LinkedIn";
+  if (/github\.com\//i.test(url)) return "GitHub";
+  return link.label.trim() || url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/+$/, "");
 }
 
 export function CvDocument({ cv, title }: { cv: Cv; title: string }) {
@@ -98,17 +115,20 @@ export function CvDocument({ cv, title }: { cv: Cv; title: string }) {
       <Page size="A4" style={styles.page}>
         <Text style={styles.name}>{pdfSafe(c.name)}</Text>
         {cv.headline ? <Text style={styles.headline}>{pdfSafe(cv.headline)}</Text> : null}
-        <Text style={styles.contact}>
-          {contactParts.join("  |  ")}
-          {links.map((l, i) => (
-            <Text key={i}>
-              {contactParts.length || i > 0 ? "  |  " : ""}
-              <Link src={l.url} style={styles.link}>
-                {pdfSafe(l.url.replace(/^https?:\/\/(www\.)?/, ""))}
-              </Link>
-            </Text>
-          ))}
-        </Text>
+        {contactParts.length ? <Text style={styles.contact}>{contactParts.join("  |  ")}</Text> : null}
+        {/* Profile links on their own line, so long URLs don't wrap the contact line. */}
+        {links.length ? (
+          <Text style={styles.contact}>
+            {links.map((l, i) => (
+              <Text key={i}>
+                {i > 0 ? "  |  " : ""}
+                <Link src={l.url} style={styles.link}>
+                  {pdfSafe(linkText(l))}
+                </Link>
+              </Text>
+            ))}
+          </Text>
+        ) : null}
 
         {cv.summary ? (
           <Section title="Summary">
@@ -133,15 +153,18 @@ export function CvDocument({ cv, title }: { cv: Cv; title: string }) {
           <Section title="Experience">
             {cv.experience.map((e) => (
               <View key={e.id} style={styles.entry}>
-                {/* Keep each job's title with its first bullets. */}
-                <View style={styles.entryHead} minPresenceAhead={50} wrap={false}>
-                  <Text style={styles.entryTitle}>
-                    {pdfSafe([e.role, e.company].filter(Boolean).join(", "))}
-                  </Text>
-                  <Text style={styles.entryMeta}>{pdfSafe(dateRange(e.startDate, e.endDate))}</Text>
+                {/* One unbreakable block: a job's title never sits alone at the bottom of a page. */}
+                <View wrap={false}>
+                  <View style={styles.entryHead}>
+                    <Text style={styles.entryTitle}>
+                      {pdfSafe([e.role, e.company].filter(Boolean).join(", "))}
+                    </Text>
+                    <Text style={styles.entryMeta}>{pdfSafe(dateRange(e.startDate, e.endDate))}</Text>
+                  </View>
+                  {e.location ? <Text style={styles.sub}>{pdfSafe(e.location)}</Text> : null}
+                  <Bullets items={firstOf(e.bullets)} />
                 </View>
-                {e.location ? <Text style={styles.sub}>{pdfSafe(e.location)}</Text> : null}
-                <Bullets items={e.bullets} />
+                <Bullets items={restOf(e.bullets)} />
                 {e.tech.length ? (
                   <Text style={styles.sub}>
                     <Text style={styles.bold}>Tech: </Text>
@@ -157,11 +180,12 @@ export function CvDocument({ cv, title }: { cv: Cv; title: string }) {
           <Section title="Projects">
             {cv.projects.map((p) => (
               <View key={p.id} style={styles.entry}>
-                <Text style={styles.entryTitle} minPresenceAhead={40}>
-                  {pdfSafe(p.name)}
-                </Text>
-                {p.description ? <Text style={styles.sub}>{pdfSafe(p.description)}</Text> : null}
-                <Bullets items={p.bullets} />
+                <View wrap={false}>
+                  <Text style={styles.entryTitle}>{pdfSafe(p.name)}</Text>
+                  {p.description ? <Text style={styles.sub}>{pdfSafe(p.description)}</Text> : null}
+                  <Bullets items={firstOf(p.bullets)} />
+                </View>
+                <Bullets items={restOf(p.bullets)} />
                 {p.tech.length ? (
                   <Text style={styles.sub}>
                     <Text style={styles.bold}>Tech: </Text>
